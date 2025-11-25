@@ -115,8 +115,7 @@ export default function StatisticsView() {
     return "text-foreground";
   };
 
-  // 현재 활성 대회 확인
-  const currentEvent = getCurrentSeasonEvent();
+  // 현재 활성 대회 확인 (currentEvent는 라인 30에서 이미 선언됨)
   const isTournamentActive = 
     currentEvent === "kespa" || 
     currentEvent === "lck_cup" || 
