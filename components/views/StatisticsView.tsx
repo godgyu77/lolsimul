@@ -9,7 +9,7 @@ import { Trophy, TrendingUp, TrendingDown, Minus, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TeamRank } from "@/types";
 
-type TournamentKey = keyof ReturnType<typeof useGameStore>["rankings"];
+type TournamentKey = "kespaCup" | "lckCup" | "regularSeason" | "summer" | "playoff" | "msi" | "worlds";
 
 export default function StatisticsView() {
   const { rankings, teams, currentTeamId, getTeamById, matches, currentDate, getCurrentSeasonEvent } = useGameStore();

@@ -212,8 +212,8 @@ export default function SettingsView() {
         <CardContent>
           <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
             <li>Google AI Studio (https://aistudio.google.com/)에 접속</li>
-            <li>좌측 메뉴에서 "API 키" 선택</li>
-            <li>"API 키 만들기" 버튼 클릭</li>
+            <li>좌측 메뉴에서 &quot;API 키&quot; 선택</li>
+            <li>&quot;API 키 만들기&quot; 버튼 클릭</li>
             <li>생성된 API 키를 복사하여 위 입력란에 붙여넣기</li>
           </ol>
         </CardContent>
