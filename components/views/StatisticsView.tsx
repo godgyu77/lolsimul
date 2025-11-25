@@ -115,6 +115,14 @@ export default function StatisticsView() {
     return "text-foreground";
   };
 
+  // 현재 활성 대회 확인
+  const currentEvent = getCurrentSeasonEvent();
+  const isTournamentActive = 
+    currentEvent === "kespa" || 
+    currentEvent === "lck_cup" || 
+    currentEvent === "msi" || 
+    currentEvent === "worlds";
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -125,6 +133,37 @@ export default function StatisticsView() {
           대회별 순위표와 팀 통계를 확인하세요.
         </p>
       </div>
+
+      {/* 참가 팀 리스트 (대회 활성화 시) */}
+      {isTournamentActive && (
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-yellow-400" />
+              참가 팀
+            </CardTitle>
+            <CardDescription>현재 진행 중인 대회 참가 팀 목록</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {teams.map((team) => (
+                <div
+                  key={team.id}
+                  className={cn(
+                    "p-3 rounded-lg border text-center transition-colors",
+                    team.id === currentTeamId
+                      ? "bg-primary/10 border-primary"
+                      : "bg-muted/50 border-border"
+                  )}
+                >
+                  <div className="font-semibold text-sm">{team.abbreviation}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{team.name}</div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="bg-card border-border">
         <CardHeader>

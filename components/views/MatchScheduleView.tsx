@@ -12,13 +12,25 @@ export default function MatchScheduleView() {
   const [selectedDate, setSelectedDate] = useState(currentDate);
 
   // 다가오는 경기 (gameStore.upcomingMatches 우선, 없으면 scheduledMatches에서 필터링)
+  // currentDate 이후의 경기만 표시
+  const today = new Date(currentDate);
+  today.setHours(0, 0, 0, 0);
+  
   const upcomingMatches = storeUpcomingMatches.length > 0
     ? storeUpcomingMatches
-        .filter((m) => m.status === "scheduled")
+        .filter((m) => {
+          const matchDate = new Date(m.date);
+          matchDate.setHours(0, 0, 0, 0);
+          return m.status === "scheduled" && matchDate >= today;
+        })
         .sort((a, b) => a.date.getTime() - b.date.getTime())
         .slice(0, 10)
     : scheduledMatches
-        .filter((m) => m.status === "scheduled")
+        .filter((m) => {
+          const matchDate = new Date(m.date);
+          matchDate.setHours(0, 0, 0, 0);
+          return m.status === "scheduled" && matchDate >= today;
+        })
         .sort((a, b) => a.date.getTime() - b.date.getTime())
         .slice(0, 10);
 
@@ -60,9 +72,9 @@ export default function MatchScheduleView() {
     setSelectedDate(new Date(year, month + 1, 1));
   };
 
-  // D-Day 계산
+  // D-Day 계산 (currentDate 기준)
   const getDDay = (date: Date) => {
-    const today = new Date();
+    const today = new Date(currentDate);
     today.setHours(0, 0, 0, 0);
     const target = new Date(date);
     target.setHours(0, 0, 0, 0);
@@ -141,7 +153,7 @@ export default function MatchScheduleView() {
                   const day = idx + 1;
                   const date = new Date(year, month, day);
                   const isToday =
-                    date.toDateString() === new Date().toDateString();
+                    date.toDateString() === currentDate.toDateString();
                   const hasMatch = hasMatchOnDate(day);
 
                   return (

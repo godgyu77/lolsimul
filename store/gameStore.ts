@@ -346,9 +346,20 @@ function parseAIResponse(response: string, state: GameState): Partial<GameState>
         const homeTeamId = state.currentTeamId || state.teams[0]?.id || "";
         const awayTeamId = opponentTeam?.id || "";
 
+        // 날짜 파싱 (문자열 또는 Date 객체)
+        let matchDate: Date;
+        if (match.date instanceof Date) {
+          matchDate = match.date;
+        } else if (typeof match.date === "string") {
+          matchDate = new Date(match.date);
+        } else {
+          // 날짜가 없으면 업데이트된 currentDate 또는 현재 날짜 사용
+          matchDate = updates.currentDate || state.currentDate || new Date();
+        }
+
         return {
           id: `upcoming-${Date.now()}-${index}`,
-          date: match.date ? new Date(match.date) : new Date(),
+          date: matchDate,
           homeTeamId: match.isHome !== false ? homeTeamId : awayTeamId,
           awayTeamId: match.isHome !== false ? awayTeamId : homeTeamId,
           matchType: (match.matchType as Match["matchType"]) || "regular",
