@@ -95,6 +95,7 @@ interface GameState {
 
   // 선수 커리어 모드: 유저 플레이어 캐릭터
   userPlayer: Player | null; // 플레이어가 생성한 캐릭터 (선수 모드 전용)
+  userPlayerInitialTrait: string | null; // 유저 플레이어의 초기 특성 (선수 모드 전용)
 
   // API 설정
   setApiKey: (key: string) => void;
@@ -864,6 +865,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   playerSeasonStats: [], // 선수별 시즌 통계 초기화
 
   userPlayer: null, // 선수 커리어 모드 캐릭터 초기값
+  userPlayerInitialTrait: null, // 유저 플레이어의 초기 특성 초기값
 
   // API 설정
   setApiKey: (key: string) => {
@@ -941,7 +943,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       transferOffers: [], // 초기 이적 제안 없음
     };
     
-    set({ userPlayer: newPlayer });
+    set({ userPlayer: newPlayer, userPlayerInitialTrait: initialTrait });
     
     // players 배열에도 추가 (전역 선수 목록)
     set((state) => ({
@@ -1008,6 +1010,19 @@ export const useGameStore = create<GameState>((set, get) => ({
           gameState: {
             currentDate: state.currentDate.toISOString(),
             currentTeamId: state.currentTeamId,
+            gameMode: state.gameMode,
+            userPlayer: state.userPlayer ? {
+              id: state.userPlayer.id,
+              name: state.userPlayer.name,
+              nickname: state.userPlayer.nickname,
+              position: state.userPlayer.position,
+              age: state.userPlayer.age,
+              tier: state.userPlayer.tier,
+              stats: state.userPlayer.stats,
+              division: state.userPlayer.division,
+              teamId: state.userPlayer.teamId,
+            } : null,
+            userPlayerInitialTrait: state.userPlayerInitialTrait,
             teams: state.teams.map((t) => ({
               id: t.id,
               name: t.name,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { LOL_SYSTEM_PROMPT } from "@/constants/systemPrompt";
+import { LOL_SYSTEM_PROMPT, TRAIT_LIBRARY } from "@/constants/systemPrompt";
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,13 +36,39 @@ export async function POST(request: NextRequest) {
     );
     const currentDate = new Date(gameState.currentDate);
     
-    const gameStateText = `
+    // 게임 모드 및 선수 정보 추가
+    let gameStateText = `
 현재 게임 상태:
 - 날짜: ${currentDate.getFullYear()}/${String(currentDate.getMonth() + 1).padStart(2, "0")}/${String(currentDate.getDate()).padStart(2, "0")}
+- 게임 모드: ${gameState.gameMode === "PLAYER" ? "선수 커리어 모드" : gameState.gameMode === "MANAGER" ? "감독 모드" : "미선택"}
 - 선택된 팀: ${currentTeam?.name || "없음"}
 - 팀 자금: ${currentTeam ? (currentTeam.money / 100000000).toFixed(1) : 0}억원
 - 로스터: ${currentTeam?.roster.length || 0}명
 `;
+
+    // 선수 커리어 모드이고 userPlayer가 이미 생성된 경우
+    if (gameState.gameMode === "PLAYER" && gameState.userPlayer) {
+      const player = gameState.userPlayer;
+      const initialTrait = gameState.userPlayerInitialTrait;
+      const traitInfo = initialTrait && TRAIT_LIBRARY[initialTrait as keyof typeof TRAIT_LIBRARY];
+      const traitName = traitInfo ? traitInfo.name : initialTrait || "없음";
+      
+      gameStateText += `
+- [선수 커리어 모드] 캐릭터 정보:
+  * 닉네임: ${player.nickname}
+  * 실명: ${player.name}
+  * 나이: ${player.age}세
+  * 포지션: ${player.position}
+  * 초기 특성: ${traitName}${traitInfo ? ` (${traitInfo.desc})` : ""}
+  * 등급: ${player.tier}
+  * 소속: ${player.division || "2군"}
+  * 스탯: 라인전 ${player.stats?.라인전 || 0}, 한타 ${player.stats?.한타 || 0}, 운영 ${player.stats?.운영 || 0}, 피지컬 ${player.stats?.피지컬 || 0}, 챔프폭 ${player.stats?.챔프폭 || 0}, 멘탈 ${player.stats?.멘탈 || 0}
+  
+[중요] 이 선수는 이미 캐릭터 생성이 완료되었습니다. 사용자에게 정보를 다시 묻지 말고, 다음 메시지를 출력하세요:
+"입력하신 정보(**닉네임**: ${player.nickname}, **실명**: ${player.name}, **나이**: ${player.age}세, **포지션**: ${player.position}, **특성**: ${traitName})로 캐릭터 생성을 완료했습니다. 이제 팀을 선택해주세요."
+그 후 즉시 팀 선택 단계로 진행하세요.
+`;
+    }
 
     // 사용자 메시지 구성
     const userMessage = `${gameStateText}
