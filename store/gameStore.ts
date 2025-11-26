@@ -96,11 +96,12 @@ interface GameState {
   // 선수 커리어 모드: 유저 플레이어 캐릭터
   userPlayer: Player | null; // 플레이어가 생성한 캐릭터 (선수 모드 전용)
   userPlayerInitialTrait: string | null; // 유저 플레이어의 초기 특성 (선수 모드 전용)
+  userPlayerRoleModelId: string | null; // 유저 플레이어의 롤모델 선수 ID (선수 모드 전용)
 
   // API 설정
   setApiKey: (key: string) => void;
   setGameMode: (mode: "MANAGER" | "PLAYER" | null) => void;
-  createUserPlayer: (playerData: Omit<Player, "id" | "tier" | "stats" | "salary" | "contractEndsAt" | "teamId" | "division" | "transferOffers"> & { initialTrait: string }) => void; // 캐릭터 생성
+  createUserPlayer: (playerData: Omit<Player, "id" | "tier" | "stats" | "salary" | "contractEndsAt" | "teamId" | "division" | "transferOffers"> & { initialTrait: string; roleModelId?: string | null }) => void; // 캐릭터 생성
   
   // 채팅 관련
   addMessage: (message: ChatMessage) => void;
@@ -866,6 +867,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   userPlayer: null, // 선수 커리어 모드 캐릭터 초기값
   userPlayerInitialTrait: null, // 유저 플레이어의 초기 특성 초기값
+  userPlayerRoleModelId: null, // 유저 플레이어의 롤모델 선수 ID 초기값
 
   // API 설정
   setApiKey: (key: string) => {
@@ -880,7 +882,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   createUserPlayer: (playerData) => {
-    const { name, nickname, position, age, initialTrait } = playerData;
+    const { name, nickname, position, age, initialTrait, roleModelId } = playerData;
     
     // 초기 스탯 생성 (D~C등급 수준, 2군 신인)
     const baseStat = 60; // 기본 스탯
@@ -943,7 +945,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       transferOffers: [], // 초기 이적 제안 없음
     };
     
-    set({ userPlayer: newPlayer, userPlayerInitialTrait: initialTrait });
+    set({ 
+      userPlayer: newPlayer, 
+      userPlayerInitialTrait: initialTrait,
+      userPlayerRoleModelId: roleModelId || null 
+    });
     
     // players 배열에도 추가 (전역 선수 목록)
     set((state) => ({
@@ -1023,6 +1029,7 @@ export const useGameStore = create<GameState>((set, get) => ({
               teamId: state.userPlayer.teamId,
             } : null,
             userPlayerInitialTrait: state.userPlayerInitialTrait,
+            userPlayerRoleModelId: state.userPlayerRoleModelId,
             teams: state.teams.map((t) => ({
               id: t.id,
               name: t.name,
@@ -1351,6 +1358,9 @@ export const useGameStore = create<GameState>((set, get) => ({
           },
         };
 
+        // 상태 가져오기
+        const state = get();
+
         // 경기 결과를 matches에 추가
         const newMatches = [...state.matches, completedMatch];
         const newScheduledMatches = state.scheduledMatches.filter((m) => m.id !== matchId);
@@ -1365,6 +1375,52 @@ export const useGameStore = create<GameState>((set, get) => ({
           type: "match",
           relatedTeamIds: [homeTeam.id, awayTeam.id],
         };
+
+        // 롤모델 관련 뉴스 생성
+        if (state.gameMode === "PLAYER" && state.userPlayerRoleModelId) {
+          // 롤모델이 POG를 받은 경우
+          if (pogPlayer.id === state.userPlayerRoleModelId) {
+            const roleModelNews: NewsItem = {
+              id: `rolemodel-pog-${Date.now()}`,
+              title: `롤모델 ${pogPlayer.nickname} 선수, POG 수상!`,
+              content: `존경하는 롤모델 ${pogPlayer.nickname}(${pogPlayer.name}) 선수가 ${winnerTeam.name}의 승리에 기여하며 POG를 수상했습니다. 이번 경기를 통해 더 많은 영감을 받았습니다.`,
+              date: new Date(match.date),
+              type: "general",
+              relatedTeamIds: [winnerTeam.id],
+            };
+            return {
+              matches: newMatches,
+              scheduledMatches: newScheduledMatches,
+              currentMatch: null,
+              news: [roleModelNews, news, ...state.news].slice(0, 50),
+            };
+          }
+          
+          // 내가 POG를 받고 롤모델이 상대팀에 있었던 경우
+          const isUserPlayerPOG = pogPlayer.id === state.userPlayer?.id;
+          const isRoleModelInMatch = homeTeam.roster.some(p => p.id === state.userPlayerRoleModelId) ||
+                                     awayTeam.roster.some(p => p.id === state.userPlayerRoleModelId);
+          
+          if (isUserPlayerPOG && isRoleModelInMatch) {
+            const roleModel = state.players.find(p => p.id === state.userPlayerRoleModelId);
+            if (roleModel) {
+              const roleModelNews: NewsItem = {
+                id: `rolemodel-outperformed-${Date.now()}`,
+                title: `차세대 에이스의 등장! ${state.userPlayer?.nickname} 선수`,
+                content: `신인 ${state.userPlayer?.nickname}(${state.userPlayer?.name}) 선수가 롤모델 ${roleModel.nickname} 선수가 있는 경기에서 POG를 수상하며 주목받고 있습니다. "롤모델을 뛰어넘는 것이 목표였습니다"라고 소감을 밝혔습니다.`,
+                date: new Date(match.date),
+                type: "general",
+                relatedTeamIds: [homeTeam.id, awayTeam.id],
+              };
+              return {
+                matches: newMatches,
+                scheduledMatches: newScheduledMatches,
+                currentMatch: null,
+                news: [roleModelNews, news, ...state.news].slice(0, 50),
+              };
+            }
+          }
+        }
 
         return {
           matches: newMatches,
@@ -1478,11 +1534,46 @@ export const useGameStore = create<GameState>((set, get) => ({
         relatedTeamIds: [homeTeam.id, awayTeam.id],
       };
 
+      // 롤모델 관련 뉴스 생성
+      const roleModelNews: NewsItem[] = [];
+      if (state.gameMode === "PLAYER" && state.userPlayerRoleModelId) {
+        // 롤모델이 POG를 받은 경우
+        if (pogPlayer.id === state.userPlayerRoleModelId) {
+          roleModelNews.push({
+            id: `rolemodel-pog-${Date.now()}`,
+            title: `롤모델 ${pogPlayer.nickname} 선수, POG 수상!`,
+            content: `존경하는 롤모델 ${pogPlayer.nickname}(${pogPlayer.name}) 선수가 ${winnerTeam.name}의 승리에 기여하며 POG를 수상했습니다. 이번 경기를 통해 더 많은 영감을 받았습니다.`,
+            date: new Date(match.date),
+            type: "general",
+            relatedTeamIds: [winnerTeam.id],
+          });
+        }
+        
+        // 내가 POG를 받고 롤모델이 상대팀에 있었던 경우
+        const isUserPlayerPOG = pogPlayer.id === state.userPlayer?.id;
+        const isRoleModelInMatch = homeTeam.roster.some(p => p.id === state.userPlayerRoleModelId) ||
+                                   awayTeam.roster.some(p => p.id === state.userPlayerRoleModelId);
+        
+        if (isUserPlayerPOG && isRoleModelInMatch) {
+          const roleModel = state.players.find(p => p.id === state.userPlayerRoleModelId);
+          if (roleModel) {
+            roleModelNews.push({
+              id: `rolemodel-outperformed-${Date.now()}`,
+              title: `차세대 에이스의 등장! ${state.userPlayer?.nickname} 선수`,
+              content: `신인 ${state.userPlayer?.nickname}(${state.userPlayer?.name}) 선수가 롤모델 ${roleModel.nickname} 선수가 있는 경기에서 POG를 수상하며 주목받고 있습니다. "롤모델을 뛰어넘는 것이 목표였습니다"라고 소감을 밝혔습니다.`,
+              date: new Date(match.date),
+              type: "general",
+              relatedTeamIds: [homeTeam.id, awayTeam.id],
+            });
+          }
+        }
+      }
+
       return {
         matches: newMatches,
         scheduledMatches: newScheduledMatches,
         currentMatch: null,
-        news: [news, ...state.news].slice(0, 50),
+        news: [...roleModelNews, news, ...state.news].slice(0, 50),
       };
     });
   },

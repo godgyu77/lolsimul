@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { User, Sparkles } from "lucide-react";
+import { User, Sparkles, Star } from "lucide-react";
 import { useGameStore } from "@/store/gameStore";
-import { Position } from "@/types";
+import { Position, Player } from "@/types";
 import { TRAIT_LIBRARY } from "@/constants/systemPrompt";
 
 export default function CharacterCreationModal() {
-  const { createUserPlayer, gameMode, userPlayer } = useGameStore();
+  const { createUserPlayer, gameMode, userPlayer, players, teams } = useGameStore();
   const [isMounted, setIsMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   
@@ -17,6 +17,7 @@ export default function CharacterCreationModal() {
   const [age, setAge] = useState<number>(17);
   const [position, setPosition] = useState<Position | "">("");
   const [initialTrait, setInitialTrait] = useState<string>("");
+  const [roleModelId, setRoleModelId] = useState<string>("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // 클라이언트에서만 마운트 상태 확인
@@ -35,6 +36,27 @@ export default function CharacterCreationModal() {
   const cTierTraits = Object.entries(TRAIT_LIBRARY)
     .filter(([_, trait]) => trait.tier === "C")
     .map(([key, trait]) => ({ key, ...trait }));
+
+  // 1군 선수만 필터링 (롤모델 선택용)
+  const availableRoleModels = useMemo(() => {
+    return players
+      .filter((p) => p.division === "1군")
+      .map((p) => {
+        const team = teams.find((t) => t.id === p.teamId);
+        return {
+          ...p,
+          teamName: team?.name || "무소속",
+          teamAbbr: team?.abbreviation || "",
+        };
+      })
+      .sort((a, b) => {
+        // 팀명으로 먼저 정렬, 그 다음 닉네임으로 정렬
+        if (a.teamName !== b.teamName) {
+          return a.teamName.localeCompare(b.teamName);
+        }
+        return a.nickname.localeCompare(b.nickname);
+      });
+  }, [players, teams]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -76,6 +98,7 @@ export default function CharacterCreationModal() {
       position: position as Position,
       age,
       initialTrait,
+      roleModelId: roleModelId || null,
     });
 
     setIsOpen(false);
@@ -225,6 +248,39 @@ export default function CharacterCreationModal() {
             {initialTrait && cTierTraits.find((t) => t.key === initialTrait) && (
               <p className="text-sm text-muted-foreground">
                 {cTierTraits.find((t) => t.key === initialTrait)?.desc}
+              </p>
+            )}
+          </div>
+
+          {/* 롤모델 선택 */}
+          <div className="space-y-2">
+            <label htmlFor="roleModel" className="block text-white font-semibold text-base flex items-center gap-2">
+              <Star className="w-4 h-4 text-yellow-400" />
+              롤모델 (선택)
+            </label>
+            <select
+              id="roleModel"
+              value={roleModelId}
+              onChange={(e) => {
+                setRoleModelId(e.target.value);
+              }}
+              className="w-full px-4 py-3 bg-input font-medium border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-white"
+            >
+              <option value="">롤모델을 선택하지 않음</option>
+              {availableRoleModels.map((player) => (
+                <option key={player.id} value={player.id}>
+                  [{player.teamAbbr}] {player.nickname} ({player.name}) - {player.position} ({player.tier})
+                </option>
+              ))}
+            </select>
+            {roleModelId && (
+              <p className="text-sm text-muted-foreground">
+                {(() => {
+                  const selected = availableRoleModels.find((p) => p.id === roleModelId);
+                  return selected
+                    ? `${selected.teamName}의 ${selected.nickname} 선수를 롤모델로 선택했습니다.`
+                    : "";
+                })()}
               </p>
             )}
           </div>

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useGameStore } from "@/store/gameStore";
 import { useUIStore } from "@/store/uiStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { X, Users, Trophy, Calendar } from "lucide-react";
+import { X, Users, Trophy, Calendar, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { startInteractiveSimulation } from "@/lib/simulation/engine";
 
@@ -19,23 +19,69 @@ export default function PreMatchModal() {
     scheduledMatches, 
     getTeamById, 
     currentTeamId,
+    userPlayer,
+    userPlayerRoleModelId,
+    players,
+    addMessage,
   } = useGameStore();
   const [rosterConfirmed, setRosterConfirmed] = useState(false);
+  const [roleModelMatchup, setRoleModelMatchup] = useState<{ player: any; isSamePosition: boolean } | null>(null);
 
-  if (!pendingMatchId) return null;
+  const match = pendingMatchId ? scheduledMatches.find((m) => m.id === pendingMatchId) : null;
+  const homeTeam = match ? getTeamById(match.homeTeamId) : null;
+  const awayTeam = match ? getTeamById(match.awayTeamId) : null;
+  const isHome = match ? match.homeTeamId === currentTeamId : false;
+  const opponent = isHome ? awayTeam : homeTeam;
+  const myTeam = isHome ? homeTeam : awayTeam;
 
-  const match = scheduledMatches.find((m) => m.id === pendingMatchId);
-  if (!match) {
+  // 롤모델 매치업 감지
+  useEffect(() => {
+    if (!pendingMatchId || !match || !userPlayer || !userPlayerRoleModelId || !opponent) {
+      setRoleModelMatchup(null);
+      return;
+    }
+
+    const roleModel = players.find((p) => p.id === userPlayerRoleModelId);
+    if (!roleModel) {
+      setRoleModelMatchup(null);
+      return;
+    }
+
+    // 상대 팀에 롤모델이 있는지 확인
+    const isRoleModelInOpponent = opponent.roster.some((p) => p.id === userPlayerRoleModelId);
+    if (isRoleModelInOpponent) {
+      const isSamePosition = roleModel.position === userPlayer.position;
+      setRoleModelMatchup({
+        player: roleModel,
+        isSamePosition,
+      });
+
+      // 롤모델 매치업 뉴스 생성
+      const roleModelTeam = getTeamById(roleModel.teamId);
+      const matchupMessage = isSamePosition
+        ? `🎯 **롤모델 매치업!**\n\n존경하는 ${roleModel.nickname}(${roleModel.name}) 선수와 같은 포지션(${roleModel.position})에서 맞대결하게 되었습니다. 이번 경기는 특별한 의미가 있습니다.\n\n"드디어 만나게 되었네요. 제가 배우고 싶었던 선수입니다."`
+        : `⭐ **롤모델과의 경기**\n\n롤모델인 ${roleModel.nickname}(${roleModel.name}) 선수가 상대 팀(${roleModelTeam?.name})에 있습니다. 같은 경기장에서 플레이하게 되어 영광입니다.\n\n"${roleModel.nickname} 선수를 뛰어넘어 보겠습니다!"`;
+
+      addMessage({
+        id: `rolemodel-matchup-${Date.now()}`,
+        type: "game",
+        content: matchupMessage,
+        timestamp: new Date(),
+      });
+    } else {
+      setRoleModelMatchup(null);
+    }
+  }, [pendingMatchId, match, userPlayer, userPlayerRoleModelId, opponent, players, getTeamById, addMessage]);
+
+  if (!pendingMatchId || !match) {
+    return null;
+  }
+
+  if (!homeTeam || !awayTeam) {
     setPendingMatchId(null);
     setShowPreMatchModal(false);
     return null;
   }
-
-  const homeTeam = getTeamById(match.homeTeamId);
-  const awayTeam = getTeamById(match.awayTeamId);
-  const isHome = match.homeTeamId === currentTeamId;
-  const opponent = isHome ? awayTeam : homeTeam;
-  const myTeam = isHome ? homeTeam : awayTeam;
 
   const matchTypeNames: Record<string, string> = {
     regular: "정규",
@@ -118,6 +164,21 @@ export default function PreMatchModal() {
               {match.matchType === "regular" ? "3전 2선승제 (Bo3)" : "5전 3선승제 (Bo5)"}
             </div>
           </div>
+
+          {/* 롤모델 매치업 알림 */}
+          {roleModelMatchup && (
+            <div className="p-4 rounded-lg border-2 border-yellow-400/50 bg-yellow-400/10">
+              <div className="flex items-center gap-2 mb-2">
+                <Star className="w-5 h-5 text-yellow-400" />
+                <h3 className="font-semibold text-yellow-400">롤모델 매치업!</h3>
+              </div>
+              <p className="text-sm text-white/90">
+                {roleModelMatchup.isSamePosition
+                  ? `같은 포지션(${roleModelMatchup.player.position})에서 롤모델 ${roleModelMatchup.player.nickname} 선수와 맞대결합니다!`
+                  : `롤모델 ${roleModelMatchup.player.nickname} 선수가 상대 팀에 있습니다.`}
+              </p>
+            </div>
+          )}
 
           {/* 로스터 확인 */}
           <div className="p-4 rounded-lg border border-border bg-muted/20">

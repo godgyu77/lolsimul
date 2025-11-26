@@ -1,12 +1,27 @@
 "use client";
 
 import { useGameStore } from "@/store/gameStore";
-import { Calendar, DollarSign, Clock } from "lucide-react";
+import { Calendar, DollarSign, Clock, Star } from "lucide-react";
 
 export default function HeaderStatus() {
-  const { currentDate, currentTeamId, scheduledMatches, getTeamById, getCurrentSeasonEvent } = useGameStore();
+  const { 
+    currentDate, 
+    currentTeamId, 
+    scheduledMatches, 
+    getTeamById, 
+    getCurrentSeasonEvent,
+    gameMode,
+    userPlayer,
+    userPlayerRoleModelId,
+    players,
+  } = useGameStore();
   const currentTeam = getTeamById(currentTeamId);
   const seasonEvent = getCurrentSeasonEvent();
+  
+  // 롤모델 정보 가져오기
+  const roleModel = userPlayerRoleModelId 
+    ? players.find((p) => p.id === userPlayerRoleModelId)
+    : null;
 
   // 아시안게임 개최 여부 확인 (4년 주기)
   const isAsianGamesYear = (year: number): boolean => {
@@ -129,15 +144,29 @@ export default function HeaderStatus() {
             </div>
           </div>
 
-          {/* 우측: 보유 자금 */}
-          {currentTeam && (
+          {/* 우측: 보유 자금 또는 선수 정보 */}
+          {gameMode === "PLAYER" && userPlayer ? (
+            <div className="flex items-center gap-4">
+              {roleModel && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Star className="w-4 h-4 text-yellow-400" />
+                  <span className="text-muted-foreground">롤모델:</span>
+                  <span className="font-semibold">{roleModel.nickname}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">{userPlayer.nickname}</span>
+                <span className="text-xs text-muted-foreground">({userPlayer.position})</span>
+              </div>
+            </div>
+          ) : currentTeam ? (
             <div className="flex items-center gap-2">
               <DollarSign className="w-4 h-4 text-cyber-green" />
               <span className="font-mono font-semibold text-cyber-green">
                 {(currentTeam.money / 100000000).toFixed(1)}억원
               </span>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* 모바일 레이아웃 */}
