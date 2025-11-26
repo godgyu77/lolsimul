@@ -47,3 +47,47 @@
   animation: cyber-glow 2s ease-in-out infinite;
 }
 
+/* Markdown 테이블 스타일 */
+.markdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+.markdown-table thead {
+  background-color: hsl(var(--primary) / 0.2);
+}
+
+.markdown-table th {
+  border: 1px solid hsl(var(--border));
+  padding: 0.75rem 1rem;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.markdown-table tbody tr {
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+}
+
+.markdown-table tbody tr:last-child {
+  border-bottom: 2px solid hsl(var(--border));
+}
+
+.markdown-table tbody tr.team1 {
+  background-color: hsl(var(--card));
+}
+
+.markdown-table tbody tr.team2 {
+  background-color: hsl(var(--muted) / 0.3);
+}
+
+.markdown-table td {
+  border: 1px solid hsl(var(--border) / 0.5);
+  padding: 0.5rem 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+}
+

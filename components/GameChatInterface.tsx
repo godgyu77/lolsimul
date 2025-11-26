@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Send, MessageSquare, X } from "lucide-react";
 import { useGameStore, ChatMessage } from "@/store/gameStore";
 import { useUIStore } from "@/store/uiStore";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function GameChatInterface() {
-  const { apiKey, messages, sendCommand, news } = useGameStore();
+  const { apiKey, messages, sendCommand, news, currentOptions, setCurrentOptions } = useGameStore();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -36,19 +37,25 @@ export default function GameChatInterface() {
     }
   }, [news, messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading || !apiKey) return;
+  const handleSend = async (command?: string) => {
+    const commandToSend = command || input.trim();
+    if (!commandToSend || isLoading || !apiKey) return;
 
     setInput("");
     setIsLoading(true);
+    setCurrentOptions([]); // 선택지 초기화
 
     try {
-      await sendCommand(input);
+      await sendCommand(commandToSend);
     } catch (error) {
       console.error("명령 실행 오류:", error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleOptionClick = (value: string) => {
+    handleSend(value);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -73,20 +80,102 @@ export default function GameChatInterface() {
     }
   };
 
+  // Markdown 테이블을 HTML로 변환
+  const renderMarkdownTable = (content: string): string => {
+    // 테이블 패턴 찾기: | 컬럼1 | 컬럼2 | ... 형식
+    const tableRegex = /(\|[^\n]+\|\n\|[:\-| ]+\|\n(?:\|[^\n]+\|\n?)+)/g;
+    let processedContent = content;
+
+    processedContent = processedContent.replace(tableRegex, (match) => {
+      const lines = match.trim().split('\n').filter(line => line.trim().startsWith('|'));
+      if (lines.length < 2) return match;
+
+      // 헤더와 구분선 분리
+      const headerLine = lines[0];
+      const dataLines = lines.slice(2); // 구분선 제외
+
+      // 셀 파싱
+      const parseCells = (line: string) => {
+        return line.split('|').map(cell => cell.trim()).filter(cell => cell);
+      };
+
+      const headerCells = parseCells(headerLine);
+      const dataRows = dataLines.map(parseCells).filter(row => row.length > 0);
+
+      if (dataRows.length === 0) return match;
+
+      // HTML 테이블 생성
+      let html = '<div class="overflow-x-auto my-4"><table class="markdown-table">';
+      
+      // 헤더
+      html += '<thead><tr>';
+      headerCells.forEach(cell => {
+        html += `<th>${cell}</th>`;
+      });
+      html += '</tr></thead>';
+
+      // 바디
+      html += '<tbody>';
+      dataRows.forEach((row, rowIndex) => {
+        const isTeam1 = row[0]?.includes('1군');
+        const rowClass = isTeam1 ? 'team1' : 'team2';
+        html += `<tr class="${rowClass}">`;
+        row.forEach(cell => {
+          html += `<td>${cell}</td>`;
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
+
+      return html;
+    });
+
+    return processedContent;
+  };
+
+  // 메시지 내용 렌더링 (테이블 변환 포함)
+  const renderMessageContent = (content: string) => {
+    // 먼저 테이블 변환
+    let processedContent = renderMarkdownTable(content);
+    // 나머지 줄바꿈 처리
+    processedContent = processedContent.replace(/\n/g, '<br />');
+    return <div dangerouslySetInnerHTML={{ __html: processedContent }} />;
+  };
+
   return (
     <div className="flex flex-col h-full bg-card border-l border-border">
       {/* 헤더 */}
-      <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="w-5 h-5 text-cyber-blue" />
-          <h2 className="text-base sm:text-lg font-bold">게임 진행</h2>
+      <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-border">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-cyber-blue" />
+            <h2 className="text-base sm:text-lg font-bold">게임 진행</h2>
+          </div>
+          <button
+            onClick={() => useUIStore.getState().setIsChatOpen(false)}
+            className="lg:hidden p-1 hover:bg-accent rounded-lg"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
-        <button
-          onClick={() => useUIStore.getState().setIsChatOpen(false)}
-          className="lg:hidden p-1 hover:bg-accent rounded-lg"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        
+        {/* 데스크탑 선택지 (헤더에 고정) */}
+        {currentOptions.length > 0 && (
+          <div className="hidden lg:flex flex-wrap gap-2 mt-2">
+            {currentOptions.map((option, index) => (
+              <Button
+                key={index}
+                onClick={() => handleOptionClick(option.value)}
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                disabled={isLoading}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 메시지 영역 */}
@@ -101,7 +190,9 @@ export default function GameChatInterface() {
             {message.type === "news" && (
               <div className="text-xs font-semibold mb-1 opacity-70 text-white">뉴스</div>
             )}
-            <div className="whitespace-pre-wrap break-words text-white">{message.content}</div>
+            <div className="whitespace-pre-wrap break-words text-white">
+              {renderMessageContent(message.content)}
+            </div>
             <div className="text-xs opacity-50 mt-1 text-white/70">
               {message.timestamp.toLocaleTimeString("ko-KR", {
                 hour: "2-digit",
@@ -112,6 +203,45 @@ export default function GameChatInterface() {
         ))}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* 모바일 선택지 모달 */}
+      {currentOptions.length > 0 && (
+        <div 
+          className="lg:hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setCurrentOptions([]);
+            }
+          }}
+        >
+          <Card className="w-full max-w-md">
+            <CardContent className="p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold">선택하세요</h3>
+                <button
+                  onClick={() => setCurrentOptions([])}
+                  className="p-1 hover:bg-accent rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="space-y-2">
+                {currentOptions.map((option, index) => (
+                  <Button
+                    key={index}
+                    onClick={() => handleOptionClick(option.value)}
+                    variant="default"
+                    className="w-full"
+                    disabled={isLoading}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* 입력 영역 */}
       <div className="p-3 sm:p-4 border-t border-border">

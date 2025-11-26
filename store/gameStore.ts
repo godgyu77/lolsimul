@@ -23,6 +23,12 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
+// 선택지 옵션 타입
+export interface Option {
+  label: string;
+  value: string;
+}
+
 interface GameState {
   // API 설정
   apiKey: string | null; // Gemini API 키
@@ -73,12 +79,16 @@ interface GameState {
   // 로딩 상태
   isLoading: boolean; // AI 응답 처리 중 여부
 
+  // 선택지 옵션
+  currentOptions: Option[]; // 현재 표시할 선택지
+
   // API 설정
   setApiKey: (key: string) => void;
   
   // 채팅 관련
   addMessage: (message: ChatMessage) => void;
   sendCommand: (command: string) => Promise<void>;
+  setCurrentOptions: (options: Option[]) => void;
   
   // 게임 진행 제어
   togglePause: () => void;
@@ -276,9 +286,39 @@ function calculateTeamSalary(team: Team): number {
   return team.roster.reduce((sum, player) => sum + player.salary, 0);
 }
 
-// 응답 파싱 함수
-function parseAIResponse(response: string, state: GameState): Partial<GameState> {
+  // 응답 파싱 함수
+function parseAIResponse(response: string, state: GameState): { updates: Partial<GameState>; options: Option[]; filteredContent: string } {
   const updates: Partial<GameState> = {};
+  let filteredContent = response;
+  const options: Option[] = [];
+  
+  // [OPTIONS] 파싱: 선택지 추출
+  const optionsMatch = response.match(/\[OPTIONS:\s*(\[.*?\])\]/s);
+  if (optionsMatch) {
+    try {
+      const jsonStr = optionsMatch[1];
+      const optionsData = JSON.parse(jsonStr);
+      if (Array.isArray(optionsData)) {
+        options.push(...optionsData.map((opt: any) => ({
+          label: opt.label || opt.text || String(opt),
+          value: opt.value || opt.command || String(opt),
+        })));
+      }
+      // 선택지 텍스트 제거
+      filteredContent = filteredContent.replace(/\[OPTIONS:\s*\[.*?\]\]/s, '');
+    } catch (e) {
+      console.error("선택지 파싱 오류:", e);
+    }
+  }
+  
+  // 시스템 메시지 필터링: [NEWS: {...}], [GUI_EVENT: {...}] 등 제거
+  filteredContent = filteredContent.replace(/\[NEWS:\s*\{[^}]*\}\]/g, '');
+  filteredContent = filteredContent.replace(/\[GUI_EVENT:\s*\{[^}]*\}\]/g, '');
+  filteredContent = filteredContent.replace(/\[STATUS:\s*[^\]]*\]/g, '');
+  filteredContent = filteredContent.replace(/\[UPCOMING_MATCHES:\s*\[.*?\]\]/s, '');
+  filteredContent = filteredContent.replace(/\[RANKING:\s*\{.*?\}\]/s, '');
+  filteredContent = filteredContent.replace(/\[FA_LIST:\s*\[.*?\]\]/s, '');
+  filteredContent = filteredContent.replace(/\[ROSTER_UPDATE:\s*\{.*?\}\]/s, '');
   
   // [STATUS] 파싱: 날짜, 자금 등 업데이트
   // 형식: [STATUS] 날짜: YYYY/MM/DD (D-Day) | 자금: 000.0억 원 | 현재 일정: [스프링 1R / 스토브리그 / MSI 등]
@@ -693,7 +733,7 @@ function parseAIResponse(response: string, state: GameState): Partial<GameState>
     }
   }
   
-  return updates;
+  return { updates, options, filteredContent };
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -734,6 +774,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     staff: [],
   },
   isLoading: false,
+  currentOptions: [],
 
   // API 설정
   setApiKey: (key: string) => {
@@ -748,6 +789,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => ({
       messages: [...state.messages, message],
     }));
+  },
+
+  setCurrentOptions: (options: Option[]) => {
+    set({ currentOptions: options });
   },
 
   sendCommand: async (command: string) => {
@@ -826,17 +871,21 @@ export const useGameStore = create<GameState>((set, get) => ({
         messages: s.messages.filter((m) => m.id !== loadingId),
       }));
 
-      // AI 응답 메시지 추가
+      // 응답 파싱하여 상태 업데이트 및 필터링
+      const { updates, options, filteredContent } = parseAIResponse(aiResponse, get());
+      
+      // 필터링된 내용으로 메시지 추가
       const aiMessage: ChatMessage = {
         id: `ai-${Date.now()}`,
         type: "game",
-        content: aiResponse,
+        content: filteredContent.trim(),
         timestamp: new Date(),
       };
       set((s) => ({ messages: [...s.messages, aiMessage] }));
 
-      // 응답 파싱하여 상태 업데이트
-      const updates = parseAIResponse(aiResponse, get());
+      // 선택지 업데이트
+      set({ currentOptions: options });
+
       if (Object.keys(updates).length > 0) {
         // rosters 업데이트가 있으면 별도로 처리
         if (updates.rosters) {
