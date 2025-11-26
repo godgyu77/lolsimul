@@ -1037,9 +1037,18 @@ export const useGameStore = create<GameState>((set, get) => ({
               roster: t.roster.map((p) => ({
                 id: p.id,
                 nickname: p.nickname,
+                name: p.name,
                 position: p.position,
                 tier: p.tier,
               })),
+            })),
+            players: state.players.map((p) => ({
+              id: p.id,
+              nickname: p.nickname,
+              name: p.name,
+              position: p.position,
+              tier: p.tier,
+              teamId: p.teamId,
             })),
             news: state.news.slice(0, 10), // 최근 10개만
           },

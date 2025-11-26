@@ -53,19 +53,33 @@ export async function POST(request: NextRequest) {
       const traitInfo = initialTrait && TRAIT_LIBRARY[initialTrait as keyof typeof TRAIT_LIBRARY];
       const traitName = traitInfo ? traitInfo.name : initialTrait || "없음";
       
+      // 롤모델 정보 가져오기
+      let roleModelInfo = "";
+      let roleModelText = "";
+      if (gameState.userPlayerRoleModelId) {
+        // players 배열에서 롤모델 찾기
+        const roleModel = gameState.players?.find((p: any) => p.id === gameState.userPlayerRoleModelId);
+        if (roleModel) {
+          const roleModelTeam = gameState.teams.find((t: any) => t.id === roleModel.teamId);
+          roleModelInfo = `  * 롤모델: ${roleModel.nickname}(${roleModel.name}) - ${roleModelTeam?.name || "무소속"} ${roleModel.position} (${roleModel.tier})`;
+          roleModelText = `${roleModel.nickname}(${roleModel.name})`;
+        }
+      }
+      
       gameStateText += `
 - [선수 커리어 모드] 캐릭터 정보:
   * 닉네임: ${player.nickname}
   * 실명: ${player.name}
   * 나이: ${player.age}세
   * 포지션: ${player.position}
-  * 초기 특성: ${traitName}${traitInfo ? ` (${traitInfo.desc})` : ""}
+  * 초기 특성: ${traitName}${traitInfo ? ` (${traitInfo.desc})` : ""}${roleModelInfo ? `\n${roleModelInfo}` : ""}
   * 등급: ${player.tier}
   * 소속: ${player.division || "2군"}
   * 스탯: 라인전 ${player.stats?.라인전 || 0}, 한타 ${player.stats?.한타 || 0}, 운영 ${player.stats?.운영 || 0}, 피지컬 ${player.stats?.피지컬 || 0}, 챔프폭 ${player.stats?.챔프폭 || 0}, 멘탈 ${player.stats?.멘탈 || 0}
   
-[중요] 이 선수는 이미 캐릭터 생성이 완료되었습니다. 사용자에게 정보를 다시 묻지 말고, 다음 메시지를 출력하세요:
-"입력하신 정보(**닉네임**: ${player.nickname}, **실명**: ${player.name}, **나이**: ${player.age}세, **포지션**: ${player.position}, **특성**: ${traitName})로 캐릭터 생성을 완료했습니다. 이제 팀을 선택해주세요."
+[중요] 이 선수는 이미 캐릭터 생성이 완료되었습니다. 사용자에게 정보를 다시 묻지 말고, 다음 메시지를 출력하세요:${roleModelText ? `
+"입력하신 정보(**닉네임**: ${player.nickname}, **실명**: ${player.name}, **나이**: ${player.age}세, **포지션**: ${player.position}, **특성**: ${traitName}, **롤모델**: ${roleModelText})로 캐릭터 생성을 완료했습니다. 이제 팀을 선택해주세요."` : `
+"입력하신 정보(**닉네임**: ${player.nickname}, **실명**: ${player.name}, **나이**: ${player.age}세, **포지션**: ${player.position}, **특성**: ${traitName})로 캐릭터 생성을 완료했습니다. 이제 팀을 선택해주세요."`}
 그 후 즉시 팀 선택 단계로 진행하세요.
 `;
     }
