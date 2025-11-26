@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Send, MessageSquare, X } from "lucide-react";
 import { useGameStore, ChatMessage } from "@/store/gameStore";
-import { useUIStore } from "@/store/uiStore";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function GameChatInterface() {
@@ -105,12 +104,12 @@ export default function GameChatInterface() {
       if (dataRows.length === 0) return match;
 
       // HTML 테이블 생성
-      let html = '<div class="overflow-x-auto my-4"><table class="markdown-table">';
+      let html = '<div class="overflow-x-auto my-4"><table class="markdown-table whitespace-nowrap">';
       
       // 헤더
       html += '<thead><tr>';
       headerCells.forEach(cell => {
-        html += `<th>${cell}</th>`;
+        html += `<th class="whitespace-nowrap">${cell}</th>`;
       });
       html += '</tr></thead>';
 
@@ -121,7 +120,7 @@ export default function GameChatInterface() {
         const rowClass = isTeam1 ? 'team1' : 'team2';
         html += `<tr class="${rowClass}">`;
         row.forEach(cell => {
-          html += `<td>${cell}</td>`;
+          html += `<td class="whitespace-nowrap">${cell}</td>`;
         });
         html += '</tr>';
       });
@@ -143,20 +142,14 @@ export default function GameChatInterface() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-card border-l border-border">
+    <div className="flex flex-col h-full w-full bg-card overflow-hidden">
       {/* 헤더 */}
-      <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-border">
+      <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-border flex-shrink-0">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-cyber-blue" />
             <h2 className="text-base sm:text-lg font-bold">게임 진행</h2>
           </div>
-          <button
-            onClick={() => useUIStore.getState().setIsChatOpen(false)}
-            className="lg:hidden p-1 hover:bg-accent rounded-lg"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
         
         {/* 데스크탑 선택지 (헤더에 고정) */}
@@ -179,7 +172,7 @@ export default function GameChatInterface() {
       </div>
 
       {/* 메시지 영역 */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto overflow-x-auto p-3 sm:p-4 space-y-3 min-h-0">
         {messages.map((message) => (
           <div
             key={message.id}
@@ -244,7 +237,7 @@ export default function GameChatInterface() {
       )}
 
       {/* 입력 영역 */}
-      <div className="p-3 sm:p-4 border-t border-border">
+      <div className="p-3 sm:p-4 border-t border-border flex-shrink-0">
         <div className="flex gap-2">
           <input
             ref={inputRef}
@@ -257,7 +250,7 @@ export default function GameChatInterface() {
             disabled={isLoading || !apiKey}
           />
           <Button
-            onClick={handleSend}
+            onClick={() => handleSend()}
             disabled={!input.trim() || isLoading || !apiKey}
             size="icon"
             className="shrink-0"

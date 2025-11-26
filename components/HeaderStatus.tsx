@@ -4,7 +4,7 @@ import { useGameStore } from "@/store/gameStore";
 import { Calendar, DollarSign, Clock } from "lucide-react";
 
 export default function HeaderStatus() {
-  const { currentDate, currentTeamId, getTeamById, getCurrentSeasonEvent } = useGameStore();
+  const { currentDate, currentTeamId, scheduledMatches, getTeamById, getCurrentSeasonEvent } = useGameStore();
   const currentTeam = getTeamById(currentTeamId);
   const seasonEvent = getCurrentSeasonEvent();
 
@@ -13,13 +13,44 @@ export default function HeaderStatus() {
     return year % 4 === 2;
   };
 
-  // D-Day 계산 (다음 주요 이벤트까지)
+  // D-Day 계산 (다음 주요 이벤트까지) - scheduledMatches에서 가장 가까운 경기 찾기
   const calculateDDay = (): { event: string; days: number } | null => {
     const today = new Date(currentDate);
+    today.setHours(0, 0, 0, 0);
+
+    // 다가오는 경기 중 가장 가까운 경기 찾기
+    const upcomingMatches = scheduledMatches
+      .filter((m) => {
+        const matchDate = new Date(m.date);
+        matchDate.setHours(0, 0, 0, 0);
+        return m.status === "scheduled" && matchDate >= today;
+      })
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    if (upcomingMatches.length > 0) {
+      const nextMatch = upcomingMatches[0];
+      const matchDate = new Date(nextMatch.date);
+      matchDate.setHours(0, 0, 0, 0);
+      const diffTime = matchDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      const matchTypeNames: Record<string, string> = {
+        regular: "정규시즌",
+        lck_cup: "LCK CUP",
+        playoff: "플레이오프",
+        msi: "MSI",
+        worlds: "월즈",
+      };
+
+      return {
+        event: matchTypeNames[nextMatch.matchType] || "경기",
+        days: diffDays,
+      };
+    }
+
+    // 경기가 없으면 다음 주요 이벤트 계산
     const year = today.getFullYear();
     const month = today.getMonth() + 1;
-
-    // 다음 주요 이벤트 찾기
     let nextEvent: { name: string; date: Date } | null = null;
 
     if (month < 1) {
@@ -29,7 +60,6 @@ export default function HeaderStatus() {
     } else if (month < 5) {
       nextEvent = { name: "MSI", date: new Date(year, 4, 1) };
     } else if (month < 9) {
-      // 아시안게임 해인지 확인
       if (isAsianGamesYear(year)) {
         nextEvent = { name: "아시안게임", date: new Date(year, 8, 1) };
       } else {

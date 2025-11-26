@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/layout/Sidebar";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "LCK Manager Simulation",
@@ -20,17 +17,14 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       </head>
-      <body className={inter.className}>
+      <body className="antialiased">
         <div className="flex h-screen overflow-hidden bg-background">
-          {/* 좌측 사이드바 */}
+          {/* 좌측 네비게이션 - 고정 너비 */}
           <Sidebar />
           
-          {/* 메인 컨텐츠 영역 */}
-          <div className="flex flex-col flex-1 overflow-hidden w-0 min-w-0">
-            {/* 중앙 메인 콘텐츠 - HeaderStatus와 ActionFooter는 page.tsx에서 처리 */}
-            <main className="flex-1 overflow-hidden min-h-0">
-              {children}
-            </main>
+          {/* 중앙 대시보드 + 우측 채팅창 영역 */}
+          <div className="flex flex-1 overflow-hidden min-w-0">
+            {children}
           </div>
         </div>
       </body>

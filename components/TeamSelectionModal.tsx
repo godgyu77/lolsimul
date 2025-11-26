@@ -9,7 +9,7 @@ import { Team, Player } from "@/types";
 import { cn } from "@/lib/utils";
 
 export default function TeamSelectionModal() {
-  const { setCurrentTeam, currentTeamId, apiKey, sendCommand } = useGameStore();
+  const { setCurrentTeam, currentTeamId, apiKey, gameMode, userPlayer, teams, sendCommand } = useGameStore();
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -74,12 +74,47 @@ export default function TeamSelectionModal() {
     if (selectedTeamId) {
       const selectedTeam = initialTeams.find(t => t.id === selectedTeamId);
       if (selectedTeam) {
+        // 선수 모드일 때: userPlayer를 선택한 팀의 2군 로스터에 추가
+        if (gameMode === "PLAYER" && userPlayer) {
+          useGameStore.setState((state) => {
+            const updatedTeams = state.teams.map((team) => {
+              if (team.id === selectedTeamId) {
+                // userPlayer의 teamId 업데이트
+                const updatedUserPlayer = {
+                  ...userPlayer,
+                  teamId: selectedTeamId,
+                };
+                
+                // 팀의 로스터에 추가 (2군)
+                return {
+                  ...team,
+                  roster: [...team.roster, updatedUserPlayer],
+                };
+              }
+              return team;
+            });
+            
+            // userPlayer의 teamId도 업데이트
+            const updatedUserPlayer = {
+              ...userPlayer,
+              teamId: selectedTeamId,
+            };
+            
+            return {
+              teams: updatedTeams,
+              userPlayer: updatedUserPlayer,
+            };
+          });
+        }
+        
         // 팀 선택
         setCurrentTeam(selectedTeamId);
         setIsOpen(false);
         
         // AI에게 해당 팀으로 시작한다는 명령어 전송
-        const command = `${selectedTeam.name}로 게임을 시작합니다.`;
+        const command = gameMode === "PLAYER" && userPlayer
+          ? `${selectedTeam.name}의 2군으로 입단했습니다. 닉네임: ${userPlayer.nickname}, 포지션: ${userPlayer.position}`
+          : `${selectedTeam.name}로 게임을 시작합니다.`;
         await sendCommand(command);
       }
     }

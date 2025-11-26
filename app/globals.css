@@ -5,19 +5,20 @@
 @layer base {
   :root {
     --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --foreground: 0 0% 100%; /* 흰색으로 변경 (가시성 향상) */
     --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card-foreground: 0 0% 100%; /* 흰색으로 변경 */
     --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary-foreground: 0 0% 100%; /* 흰색으로 변경 */
     --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary-foreground: 0 0% 100%; /* 흰색으로 변경 */
     --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent-foreground: 0 0% 100%; /* 흰색으로 변경 */
     --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted-foreground: 0 0% 90%; /* 밝은 회색으로 변경 (가시성 향상) */
     --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --input: 0 0% 15%; /* 어두운 배경 */
+    --input-foreground: 0 0% 100%; /* 흰색 텍스트 */
     --ring: 212.7 26.8% 83.9%;
     --radius: 0.5rem;
   }
@@ -30,6 +31,33 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  /* 입력 필드 가시성 향상 */
+  input, select, textarea {
+    background-color: hsl(var(--input));
+    color: hsl(var(--input-foreground));
+    font-weight: 500;
+  }
+  
+  input::placeholder, textarea::placeholder {
+    color: hsl(var(--muted-foreground));
+    opacity: 0.7;
+  }
+  
+  /* 중요한 텍스트 강조 */
+  .text-important {
+    @apply text-white font-bold text-lg;
+  }
+  
+  /* 통계/수치 강조 */
+  .stat-value {
+    @apply text-white font-bold text-xl;
+  }
+  
+  /* 이름/제목 강조 */
+  .name-text {
+    @apply text-white font-bold text-base;
   }
 }
 
@@ -54,6 +82,7 @@
   margin: 1rem 0;
   background-color: hsl(var(--card));
   color: hsl(var(--foreground));
+  min-width: 500px; /* 최소 너비 설정 (채팅창에 맞게 조정) */
 }
 
 .markdown-table thead {
@@ -66,6 +95,7 @@
   text-align: center;
   font-weight: 600;
   font-size: 0.875rem;
+  white-space: nowrap; /* 텍스트 줄바꿈 방지 */
 }
 
 .markdown-table tbody tr {
@@ -89,5 +119,6 @@
   padding: 0.5rem 1rem;
   text-align: center;
   font-size: 0.875rem;
+  white-space: nowrap; /* 텍스트 줄바꿈 방지 */
 }
 

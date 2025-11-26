@@ -1,6 +1,8 @@
 import { create } from "zustand";
-import { Player, Team, Match, NewsItem, Position, MatchInfo, TeamRank, PlayerInfo, StaffInfo, Tier, Division } from "@/types";
+import { Player, Team, Match, NewsItem, Position, MatchInfo, TeamRank, PlayerInfo, StaffInfo, Tier, Division, PlayerSeasonStats, PlayerStats } from "@/types";
 import { initialTeams, initialPlayers } from "@/constants/initialData";
+import { SimulationPhase, SimulationState, WinRateModifier, SimulationChoice } from "@/types/game";
+import { advanceSimulationPhase as engineAdvanceSimulationPhase, submitDecision as engineSubmitDecision } from "@/lib/simulation/engine";
 
 // 시즌 일정 타입
 export type SeasonEvent =
@@ -39,6 +41,7 @@ interface GameState {
   // 게임 기본 정보
   currentDate: Date;
   currentTeamId: string; // 플레이어가 관리하는 팀 ID
+  gameMode: "MANAGER" | "PLAYER" | null; // 게임 모드 (감독 모드 / 선수 커리어 모드)
   isPaused: boolean;
   season: number; // 현재 시즌 (2024, 2025 등)
 
@@ -50,6 +53,11 @@ interface GameState {
   matches: Match[];
   scheduledMatches: Match[]; // 예정된 경기들
   upcomingMatches: MatchInfo[]; // 다가오는 5경기 정보
+  currentMatch: Match | null; // 현재 진행 중인 경기
+  simulationMode: "one_set" | "match" | "tournament" | null; // 시뮬레이션 모드
+  
+  // 인터랙티브 시뮬레이션 상태 머신
+  simulationState: SimulationState;
 
   // 뉴스
   news: NewsItem[]; // 최근 뉴스 (최대 50개)
@@ -82,8 +90,16 @@ interface GameState {
   // 선택지 옵션
   currentOptions: Option[]; // 현재 표시할 선택지
 
+  // 선수별 시즌 통계
+  playerSeasonStats: PlayerSeasonStats[]; // 선수별 누적 통계
+
+  // 선수 커리어 모드: 유저 플레이어 캐릭터
+  userPlayer: Player | null; // 플레이어가 생성한 캐릭터 (선수 모드 전용)
+
   // API 설정
   setApiKey: (key: string) => void;
+  setGameMode: (mode: "MANAGER" | "PLAYER" | null) => void;
+  createUserPlayer: (playerData: Omit<Player, "id" | "tier" | "stats" | "salary" | "contractEndsAt" | "teamId" | "division" | "transferOffers"> & { initialTrait: string }) => void; // 캐릭터 생성
   
   // 채팅 관련
   addMessage: (message: ChatMessage) => void;
@@ -97,12 +113,35 @@ interface GameState {
 
   // 경기 관련
   simulateMatch: (matchId: string) => void;
+  simulateOneSet: (matchId: string) => void; // 1세트만 시뮬레이션
+  simulateMatchUntilEnd: (matchId: string) => void; // 매치 종료까지 시뮬레이션
+  simulateTournament: () => Promise<void>; // 대회 전체 진행
   scheduleMatch: (
     homeTeamId: string,
     awayTeamId: string,
     date: Date,
     matchType?: Match["matchType"]
   ) => string; // matchId 반환
+  setCurrentMatch: (match: Match | null) => void;
+  setSimulationMode: (mode: "one_set" | "match" | "tournament" | null) => void;
+  
+  // 인터랙티브 시뮬레이션 엔진 함수
+  startInteractiveSimulation: (matchId: string) => void; // 인터랙티브 시뮬레이션 시작
+  
+  // 인터랙티브 시뮬레이션 엔진
+  advanceSimulationPhase: () => void;
+  submitDecision: (choiceId: string) => void;
+  
+  // 인터랙티브 시뮬레이션 상태 머신 액션
+  setPhase: (phase: SimulationPhase | null) => void;
+  addModifier: (modifier: WinRateModifier) => void;
+  removeModifier: (source: string) => void;
+  clearModifiers: () => void;
+  setWaiting: (waiting: boolean) => void;
+  setChoices: (choices: SimulationChoice[]) => void;
+  addPhaseHistory: (phase: SimulationPhase, choiceId: string) => void;
+  resetSimulationState: () => void;
+  initializeSimulation: (matchId: string, currentSet: number) => void;
 
   // 경제 시스템
   processMonthlyExpenses: () => void;
@@ -119,6 +158,11 @@ interface GameState {
   updateRankings: (tournament: keyof GameState["rankings"], ranks: TeamRank[]) => void;
   setFAList: (players: PlayerInfo[]) => void;
   updateRosters: (rosters: Partial<GameState["rosters"]>) => void;
+  
+  // 선수별 통계 업데이트
+  updatePlayerSeasonStats: (playerId: string, stats: Partial<PlayerSeasonStats>) => void;
+  getPlayerSeasonStats: (playerId: string, tournament?: string) => PlayerSeasonStats | undefined;
+  resetSeasonStats: (season: number) => void; // 시즌 초기화
 }
 
 // 아시안게임 개최 여부 확인 (4년 주기: 2026, 2030, 2034...)
@@ -206,6 +250,36 @@ function calculateTeamLineStrength(team: Team): {
   const overall = (topPower + jglPower + midPower + adcPower + sptPower) / 5;
 
   return { top: topPower, jgl: jglPower, mid: midPower, adc: adcPower, spt: sptPower, overall };
+}
+
+// 1세트 시뮬레이션 (단일 세트만)
+function simulateOneSetLogic(
+  homeTeam: Team,
+  awayTeam: Team,
+  matchType: Match["matchType"] = "regular"
+): {
+  winner: string;
+  duration: number;
+} {
+  const homeStrength = calculateTeamLineStrength(homeTeam);
+  const awayStrength = calculateTeamLineStrength(awayTeam);
+
+  // 랜덤 변수 (컨디션) -10% ~ +10%
+  const homeCondition = 1 + (Math.random() * 0.2 - 0.1);
+  const awayCondition = 1 + (Math.random() * 0.2 - 0.1);
+
+  const homePower = homeStrength.overall * homeCondition;
+  const awayPower = awayStrength.overall * awayCondition;
+
+  // 승률 계산
+  const totalPower = homePower + awayPower;
+  const homeWinProbability = homePower / totalPower;
+
+  const setResult = Math.random() < homeWinProbability;
+  const winner = setResult ? homeTeam.id : awayTeam.id;
+  const duration = Math.floor(Math.random() * 20) + 25; // 25~45분
+
+  return { winner, duration };
 }
 
 // 경기 시뮬레이션
@@ -749,6 +823,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   ] : [],
   currentDate: new Date(2025, 11, 1), // 2025년 12월 1일부터 시작
   currentTeamId: "", // 초기값은 빈 문자열 (팀 선택 전)
+  gameMode: null, // 초기값은 null (모드 선택 전)
   isPaused: true,
   season: 2025,
   teams: initialTeams,
@@ -756,6 +831,17 @@ export const useGameStore = create<GameState>((set, get) => ({
   matches: [],
   scheduledMatches: [],
   upcomingMatches: [],
+  currentMatch: null,
+  simulationMode: null,
+  simulationState: {
+    currentPhase: null,
+    isWaitingForUser: false,
+    winRateModifiers: [],
+    currentChoices: [],
+    matchId: null,
+    currentSet: 0,
+    phaseHistory: [],
+  },
   news: [],
   newsHistory: [],
   rankings: {
@@ -775,13 +861,92 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
   isLoading: false,
   currentOptions: [],
+  playerSeasonStats: [], // 선수별 시즌 통계 초기화
+
+  userPlayer: null, // 선수 커리어 모드 캐릭터 초기값
 
   // API 설정
   setApiKey: (key: string) => {
     if (typeof window !== "undefined") {
       localStorage.setItem("gemini_api_key", key);
     }
-    set({ apiKey: key });
+    set({ apiKey: key, gameMode: null }); // API 키 설정 시 gameMode를 null로 초기화
+  },
+
+  setGameMode: (mode: "MANAGER" | "PLAYER" | null) => {
+    set({ gameMode: mode });
+  },
+
+  createUserPlayer: (playerData) => {
+    const { name, nickname, position, age, initialTrait } = playerData;
+    
+    // 초기 스탯 생성 (D~C등급 수준, 2군 신인)
+    const baseStat = 60; // 기본 스탯
+    const randomVariation = () => Math.floor(Math.random() * 15) - 7; // -7 ~ +7 랜덤 변동
+    
+    const stats: PlayerStats = {
+      라인전: baseStat + randomVariation(),
+      한타: baseStat + randomVariation(),
+      운영: baseStat + randomVariation(),
+      피지컬: baseStat + randomVariation(),
+      챔프폭: baseStat + randomVariation(),
+      멘탈: baseStat + randomVariation(),
+    };
+    
+    // 스탯 범위 제한 (1~100)
+    Object.keys(stats).forEach((key) => {
+      const statKey = key as keyof PlayerStats;
+      stats[statKey] = Math.max(1, Math.min(100, stats[statKey]));
+    });
+    
+    // 종합 능력치 계산
+    const overall = Math.round(
+      (stats.라인전 + stats.한타 + stats.운영 + stats.피지컬 + stats.챔프폭 + stats.멘탈) / 6
+    );
+    
+    // 등급 결정
+    const getTier = (ovr: number): Tier => {
+      if (ovr >= 95) return "S+";
+      if (ovr >= 90) return "S";
+      if (ovr >= 85) return "S-";
+      if (ovr >= 80) return "A+";
+      if (ovr >= 75) return "A";
+      if (ovr >= 70) return "A-";
+      if (ovr >= 65) return "B+";
+      if (ovr >= 60) return "B";
+      if (ovr >= 55) return "B-";
+      if (ovr >= 50) return "C+";
+      if (ovr >= 45) return "C";
+      if (ovr >= 40) return "C-";
+      return "D";
+    };
+    
+    const tier = getTier(overall);
+    
+    // 초기 연봉 (2군 신인 기준)
+    const initialSalary = 0.5; // 0.5억원
+    
+    const newPlayer: Player = {
+      id: `user-player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name,
+      nickname,
+      position,
+      age,
+      tier,
+      stats,
+      salary: initialSalary,
+      contractEndsAt: get().season + 2, // 2년 계약
+      teamId: "", // 팀 선택 전까지는 빈 문자열
+      division: "2군", // 2군으로 시작
+      transferOffers: [], // 초기 이적 제안 없음
+    };
+    
+    set({ userPlayer: newPlayer });
+    
+    // players 배열에도 추가 (전역 선수 목록)
+    set((state) => ({
+      players: [...state.players, newPlayer],
+    }));
   },
 
   // 채팅 관련
@@ -887,14 +1052,114 @@ export const useGameStore = create<GameState>((set, get) => ({
       set({ currentOptions: options });
 
       if (Object.keys(updates).length > 0) {
-        // rosters 업데이트가 있으면 별도로 처리
+        // rosters 업데이트가 있으면 별도로 처리하고 teams[].roster와 동기화
         if (updates.rosters) {
-          set((s) => ({
-            rosters: {
+          set((s) => {
+            const updatedRosters = {
               ...s.rosters,
               ...updates.rosters,
-            },
-          }));
+            };
+            
+            // teams 배열의 currentTeamId에 해당하는 팀의 roster도 동기화
+            const updatedTeams = s.teams.map((team) => {
+              if (team.id === s.currentTeamId) {
+                // PlayerInfo[]를 Player[]로 변환 (기존 stats 유지)
+                const allRosterPlayers: Player[] = [
+                  ...(updatedRosters.team1 || []).map((playerInfo) => {
+                    // 기존 Player 객체 찾기
+                    const existingPlayer = team.roster.find((p) => p.id === playerInfo.id);
+                    if (existingPlayer) {
+                      // 기존 stats 유지하면서 다른 속성만 업데이트
+                      return {
+                        ...existingPlayer,
+                        name: playerInfo.name,
+                        nickname: playerInfo.nickname,
+                        position: playerInfo.position,
+                        age: playerInfo.age,
+                        tier: playerInfo.tier,
+                        salary: playerInfo.salary,
+                        contractEndsAt: playerInfo.contractEndsAt,
+                        division: playerInfo.division || existingPlayer.division,
+                      };
+                    } else {
+                      // 새로운 선수: overall을 기반으로 stats 생성
+                      const avgStat = playerInfo.overall;
+                      return {
+                        id: playerInfo.id,
+                        name: playerInfo.name,
+                        nickname: playerInfo.nickname,
+                        position: playerInfo.position,
+                        age: playerInfo.age,
+                        tier: playerInfo.tier,
+                        stats: {
+                          라인전: avgStat,
+                          한타: avgStat,
+                          운영: avgStat,
+                          피지컬: avgStat,
+                          챔프폭: avgStat,
+                          멘탈: avgStat,
+                        },
+                        salary: playerInfo.salary,
+                        contractEndsAt: playerInfo.contractEndsAt,
+                        teamId: s.currentTeamId,
+                        division: playerInfo.division || "1군",
+                      };
+                    }
+                  }),
+                  ...(updatedRosters.team2 || []).map((playerInfo) => {
+                    const existingPlayer = team.roster.find((p) => p.id === playerInfo.id);
+                    if (existingPlayer) {
+                      return {
+                        ...existingPlayer,
+                        name: playerInfo.name,
+                        nickname: playerInfo.nickname,
+                        position: playerInfo.position,
+                        age: playerInfo.age,
+                        tier: playerInfo.tier,
+                        salary: playerInfo.salary,
+                        contractEndsAt: playerInfo.contractEndsAt,
+                        division: playerInfo.division || existingPlayer.division,
+                      };
+                    } else {
+                      const avgStat = playerInfo.overall;
+                      return {
+                        id: playerInfo.id,
+                        name: playerInfo.name,
+                        nickname: playerInfo.nickname,
+                        position: playerInfo.position,
+                        age: playerInfo.age,
+                        tier: playerInfo.tier,
+                        stats: {
+                          라인전: avgStat,
+                          한타: avgStat,
+                          운영: avgStat,
+                          피지컬: avgStat,
+                          챔프폭: avgStat,
+                          멘탈: avgStat,
+                        },
+                        salary: playerInfo.salary,
+                        contractEndsAt: playerInfo.contractEndsAt,
+                        teamId: s.currentTeamId,
+                        division: playerInfo.division || "2군",
+                      };
+                    }
+                  }),
+                ];
+                
+                return {
+                  ...team,
+                  roster: allRosterPlayers,
+                };
+              }
+              return team;
+            });
+            
+            return {
+              rosters: updatedRosters,
+              teams: updatedTeams,
+            };
+          });
+          
           // rosters를 제외한 나머지 업데이트
           const { rosters, ...otherUpdates } = updates;
           if (Object.keys(otherUpdates).length > 0) {
@@ -1002,43 +1267,197 @@ export const useGameStore = create<GameState>((set, get) => ({
     return matchId;
   },
 
-  simulateMatch: (matchId: string) => {
-    set((state) => {
-      const matchIndex = state.scheduledMatches.findIndex((m) => m.id === matchId);
-      if (matchIndex === -1) return state;
+  setCurrentMatch: (match: Match | null) => set({ currentMatch: match }),
+  setSimulationMode: (mode: "one_set" | "match" | "tournament" | null) => set({ simulationMode: mode }),
 
-      const match = state.scheduledMatches[matchIndex];
-      if (match.status !== "scheduled") return state;
+  // 1세트만 시뮬레이션
+  simulateOneSet: (matchId: string) => {
+    set((state) => {
+      // scheduledMatches 또는 currentMatch에서 찾기
+      let match = state.currentMatch;
+      let matchIndex = -1;
+      
+      if (!match || match.id !== matchId) {
+        matchIndex = state.scheduledMatches.findIndex((m) => m.id === matchId);
+        if (matchIndex === -1) return state;
+        match = state.scheduledMatches[matchIndex];
+      }
+
+      if (match.status === "completed") return state;
 
       const homeTeam = state.teams.find((t) => t.id === match.homeTeamId);
       const awayTeam = state.teams.find((t) => t.id === match.awayTeamId);
 
       if (!homeTeam || !awayTeam) return state;
 
-      const result = simulateMatchLogic(homeTeam, awayTeam, match.matchType);
+      // 현재 세트 스코어 가져오기
+      const currentHomeScore = match.homeScore || 0;
+      const currentAwayScore = match.awayScore || 0;
+      const currentSets = match.currentSets || [];
 
-      const completedMatch: Match = {
-        ...match,
-        status: "completed",
-        result: {
-          ...result,
-          pog: result.pog,
+      // 1세트 시뮬레이션
+      const setResult = simulateOneSetLogic(homeTeam, awayTeam, match.matchType);
+      const newHomeScore = setResult.winner === homeTeam.id ? currentHomeScore + 1 : currentHomeScore;
+      const newAwayScore = setResult.winner === awayTeam.id ? currentAwayScore + 1 : currentAwayScore;
+      const newSets = [...currentSets, setResult];
+
+      // 경기 형식 결정
+      const isBo5 = match.matchType === "lck_cup" || match.matchType === "playoff" || match.matchType === "msi" || match.matchType === "worlds";
+      const setsToWin = isBo5 ? 3 : 2;
+      const isMatchComplete = newHomeScore >= setsToWin || newAwayScore >= setsToWin;
+
+      // 경기 완료 여부 확인
+      if (isMatchComplete) {
+        const winner = newHomeScore > newAwayScore ? homeTeam.id : awayTeam.id;
+        const winnerTeam = winner === homeTeam.id ? homeTeam : awayTeam;
+        const winnerRoster = winnerTeam.roster.filter((p) => p.division === "1군");
+        const pogPlayer = winnerRoster.reduce((best, current) => {
+          const bestTotal = Object.values(best.stats).reduce((a, b) => a + b, 0);
+          const currentTotal = Object.values(current.stats).reduce((a, b) => a + b, 0);
+          return currentTotal > bestTotal ? current : best;
+        }, winnerRoster[0]);
+
+        const completedMatch: Match = {
+          ...match,
+          status: "completed",
+          homeScore: newHomeScore,
+          awayScore: newAwayScore,
+          currentSets: newSets,
+          result: {
+            homeScore: newHomeScore,
+            awayScore: newAwayScore,
+            winner,
+            pog: {
+              playerId: pogPlayer.id,
+              playerName: pogPlayer.nickname,
+              teamId: winnerTeam.id,
+            },
+            sets: newSets,
+          },
+        };
+
+        // 경기 결과를 matches에 추가
+        const newMatches = [...state.matches, completedMatch];
+        const newScheduledMatches = state.scheduledMatches.filter((m) => m.id !== matchId);
+
+        // 뉴스 생성
+        const loserTeam = winner === homeTeam.id ? awayTeam : homeTeam;
+        const news: NewsItem = {
+          id: `match-${matchId}-${Date.now()}`,
+          title: `${winnerTeam.name} ${newHomeScore} - ${newAwayScore} ${loserTeam.name}`,
+          content: `${winnerTeam.name}이(가) ${loserTeam.name}을(를) 상대로 승리했습니다. POG: ${pogPlayer.nickname} (${winnerTeam.name})`,
+          date: new Date(match.date),
+          type: "match",
+          relatedTeamIds: [homeTeam.id, awayTeam.id],
+        };
+
+        return {
+          matches: newMatches,
+          scheduledMatches: newScheduledMatches,
+          currentMatch: null,
+          news: [news, ...state.news].slice(0, 50),
+        };
+      } else {
+        // 경기 진행 중 상태로 업데이트
+        const updatedMatch: Match = {
+          ...match,
+          status: "in_progress",
+          homeScore: newHomeScore,
+          awayScore: newAwayScore,
+          currentSets: newSets,
+        };
+
+        if (matchIndex >= 0) {
+          const newScheduledMatches = [...state.scheduledMatches];
+          newScheduledMatches[matchIndex] = updatedMatch;
+          return {
+            scheduledMatches: newScheduledMatches,
+            currentMatch: updatedMatch,
+          };
+        } else {
+          return {
+            currentMatch: updatedMatch,
+          };
+        }
+      }
+    });
+  },
+
+  // 매치 종료까지 시뮬레이션
+  simulateMatchUntilEnd: (matchId: string) => {
+    const state = get();
+    let match = state.currentMatch;
+    if (!match || match.id !== matchId) {
+      const matchIndex = state.scheduledMatches.findIndex((m) => m.id === matchId);
+      if (matchIndex === -1) return;
+      match = state.scheduledMatches[matchIndex];
+    }
+
+    if (match.status === "completed") return;
+
+    const homeTeam = state.teams.find((t) => t.id === match.homeTeamId);
+    const awayTeam = state.teams.find((t) => t.id === match.awayTeamId);
+    if (!homeTeam || !awayTeam) return;
+
+    // 현재 세트 스코어 가져오기
+    let currentHomeScore = match.homeScore || 0;
+    let currentAwayScore = match.awayScore || 0;
+    let currentSets = match.currentSets || [];
+
+    // 경기 형식 결정
+    const isBo5 = match.matchType === "lck_cup" || match.matchType === "playoff" || match.matchType === "msi" || match.matchType === "worlds";
+    const setsToWin = isBo5 ? 3 : 2;
+
+    // 매치가 끝날 때까지 세트 시뮬레이션
+    while (currentHomeScore < setsToWin && currentAwayScore < setsToWin) {
+      const setResult = simulateOneSetLogic(homeTeam, awayTeam, match.matchType);
+      if (setResult.winner === homeTeam.id) {
+        currentHomeScore++;
+      } else {
+        currentAwayScore++;
+      }
+      currentSets.push(setResult);
+    }
+
+    // 경기 완료 처리
+    const winner = currentHomeScore > currentAwayScore ? homeTeam.id : awayTeam.id;
+    const winnerTeam = winner === homeTeam.id ? homeTeam : awayTeam;
+    const winnerRoster = winnerTeam.roster.filter((p) => p.division === "1군");
+    const pogPlayer = winnerRoster.reduce((best, current) => {
+      const bestTotal = Object.values(best.stats).reduce((a, b) => a + b, 0);
+      const currentTotal = Object.values(current.stats).reduce((a, b) => a + b, 0);
+      return currentTotal > bestTotal ? current : best;
+    }, winnerRoster[0]);
+
+    const completedMatch: Match = {
+      ...match,
+      status: "completed",
+      homeScore: currentHomeScore,
+      awayScore: currentAwayScore,
+      currentSets: currentSets,
+      result: {
+        homeScore: currentHomeScore,
+        awayScore: currentAwayScore,
+        winner,
+        pog: {
+          playerId: pogPlayer.id,
+          playerName: pogPlayer.nickname,
+          teamId: winnerTeam.id,
         },
-      };
+        sets: currentSets,
+      },
+    };
 
-      // 경기 결과를 matches에 추가
+    set((state) => {
       const newMatches = [...state.matches, completedMatch];
-
-      // scheduledMatches에서 제거
       const newScheduledMatches = state.scheduledMatches.filter((m) => m.id !== matchId);
 
       // 뉴스 생성
-      const winnerTeam = result.winner === homeTeam.id ? homeTeam : awayTeam;
-      const loserTeam = result.winner === homeTeam.id ? awayTeam : homeTeam;
+      const loserTeam = winner === homeTeam.id ? awayTeam : homeTeam;
       const news: NewsItem = {
         id: `match-${matchId}-${Date.now()}`,
-        title: `${winnerTeam.name} ${result.homeScore > result.awayScore ? result.homeScore : result.awayScore} - ${result.homeScore < result.awayScore ? result.homeScore : result.awayScore} ${loserTeam.name}`,
-        content: `${winnerTeam.name}이(가) ${loserTeam.name}을(를) 상대로 승리했습니다. POG: ${result.pog.playerName} (${winnerTeam.name})`,
+        title: `${winnerTeam.name} ${currentHomeScore} - ${currentAwayScore} ${loserTeam.name}`,
+        content: `${winnerTeam.name}이(가) ${loserTeam.name}을(를) 상대로 승리했습니다. POG: ${pogPlayer.nickname} (${winnerTeam.name})`,
         date: new Date(match.date),
         type: "match",
         relatedTeamIds: [homeTeam.id, awayTeam.id],
@@ -1047,9 +1466,39 @@ export const useGameStore = create<GameState>((set, get) => ({
       return {
         matches: newMatches,
         scheduledMatches: newScheduledMatches,
+        currentMatch: null,
         news: [news, ...state.news].slice(0, 50),
       };
     });
+  },
+
+  // 대회 전체 진행
+  simulateTournament: async () => {
+    const state = get();
+    const today = new Date(state.currentDate);
+    today.setHours(0, 0, 0, 0);
+
+    // 오늘 예정된 경기들 찾기
+    const todayMatches = state.scheduledMatches.filter((m) => {
+      const matchDate = new Date(m.date);
+      matchDate.setHours(0, 0, 0, 0);
+      return m.status === "scheduled" && matchDate.getTime() === today.getTime();
+    });
+
+    // 모든 경기를 순차적으로 시뮬레이션
+    for (const match of todayMatches) {
+      get().simulateMatchUntilEnd(match.id);
+      // 약간의 딜레이 (UI 업데이트를 위해)
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    // 다음 날로 진행
+    get().advanceDay();
+  },
+
+  simulateMatch: (matchId: string) => {
+    // 기존 함수는 매치 종료까지 시뮬레이션하도록 변경
+    get().simulateMatchUntilEnd(matchId);
   },
 
   // 경제 시스템
@@ -1131,6 +1580,229 @@ export const useGameStore = create<GameState>((set, get) => ({
         ...state.rosters,
         ...rosters,
       },
+    }));
+  },
+
+  // 인터랙티브 시뮬레이션 상태 머신 액션
+  setPhase: (phase: SimulationPhase | null) => {
+    set((state) => ({
+      simulationState: {
+        ...state.simulationState,
+        currentPhase: phase,
+      },
+    }));
+  },
+
+  addModifier: (modifier: WinRateModifier) => {
+    set((state) => ({
+      simulationState: {
+        ...state.simulationState,
+        winRateModifiers: [...state.simulationState.winRateModifiers, modifier],
+      },
+    }));
+  },
+
+  removeModifier: (source: string) => {
+    set((state) => ({
+      simulationState: {
+        ...state.simulationState,
+        winRateModifiers: state.simulationState.winRateModifiers.filter(
+          (m) => m.source !== source
+        ),
+      },
+    }));
+  },
+
+  clearModifiers: () => {
+    set((state) => ({
+      simulationState: {
+        ...state.simulationState,
+        winRateModifiers: [],
+      },
+    }));
+  },
+
+  setWaiting: (waiting: boolean) => {
+    set((state) => ({
+      simulationState: {
+        ...state.simulationState,
+        isWaitingForUser: waiting,
+      },
+    }));
+  },
+
+  setChoices: (choices: SimulationChoice[]) => {
+    set((state) => ({
+      simulationState: {
+        ...state.simulationState,
+        currentChoices: choices,
+      },
+    }));
+  },
+
+  addPhaseHistory: (phase: SimulationPhase, choiceId: string) => {
+    set((state) => ({
+      simulationState: {
+        ...state.simulationState,
+        phaseHistory: [
+          ...state.simulationState.phaseHistory,
+          {
+            phase,
+            choiceId,
+            timestamp: new Date(),
+          },
+        ],
+      },
+    }));
+  },
+
+  resetSimulationState: () => {
+    set({
+      simulationState: {
+        currentPhase: null,
+        isWaitingForUser: false,
+        winRateModifiers: [],
+        currentChoices: [],
+        matchId: null,
+        currentSet: 0,
+        phaseHistory: [],
+      },
+    });
+  },
+
+  initializeSimulation: (matchId: string, currentSet: number) => {
+    set({
+      simulationState: {
+        currentPhase: SimulationPhase.DRAFT,
+        isWaitingForUser: false,
+        winRateModifiers: [],
+        currentChoices: [],
+        matchId,
+        currentSet,
+        phaseHistory: [],
+      },
+    });
+  },
+
+  // 인터랙티브 시뮬레이션 시작
+  startInteractiveSimulation: (matchId: string) => {
+    const state = get();
+    const match = state.currentMatch || 
+      state.scheduledMatches.find((m) => m.id === matchId);
+    
+    if (!match) {
+      console.error("경기를 찾을 수 없습니다.");
+      return;
+    }
+
+    // 현재 세트 번호 계산
+    const currentSet = (match.currentSets?.length || 0) + 1;
+
+    // 시뮬레이션 초기화
+    get().initializeSimulation(matchId, currentSet);
+
+    // 경기를 in_progress 상태로 설정
+    const inProgressMatch: Match = {
+      ...match,
+      status: "in_progress",
+      homeScore: match.homeScore || 0,
+      awayScore: match.awayScore || 0,
+      currentSets: match.currentSets || [],
+    };
+    get().setCurrentMatch(inProgressMatch);
+
+    // 첫 페이즈로 진행 (동적 import 사용)
+    import("@/lib/simulation/engine").then((module) => {
+      module.advanceSimulationPhase();
+    });
+  },
+
+  // 인터랙티브 시뮬레이션 엔진 함수들
+  advanceSimulationPhase: () => {
+    engineAdvanceSimulationPhase();
+  },
+
+  submitDecision: (choiceId: string) => {
+    engineSubmitDecision(choiceId);
+  },
+
+  // 선수별 통계 업데이트
+  updatePlayerSeasonStats: (playerId: string, stats: Partial<PlayerSeasonStats>) => {
+    const state = get();
+    const existing = state.playerSeasonStats.find(
+      (s) => s.playerId === playerId && s.season === state.season && s.tournament === stats.tournament
+    );
+
+    if (existing) {
+      // 기존 통계 업데이트
+      const updatedStats = {
+        ...existing,
+        ...stats,
+        totalGames: stats.totalGames !== undefined ? stats.totalGames : existing.totalGames + 1,
+        totalDamage: (stats.totalDamage || 0) + existing.totalDamage,
+        totalKills: (stats.totalKills || 0) + existing.totalKills,
+        totalDeaths: (stats.totalDeaths || 0) + existing.totalDeaths,
+        totalAssists: (stats.totalAssists || 0) + existing.totalAssists,
+        wins: (stats.wins || 0) + existing.wins,
+        losses: (stats.losses || 0) + existing.losses,
+      };
+      
+      updatedStats.averageDamage = updatedStats.totalGames > 0 
+        ? updatedStats.totalDamage / updatedStats.totalGames 
+        : 0;
+      updatedStats.kda = updatedStats.totalDeaths > 0
+        ? (updatedStats.totalKills + updatedStats.totalAssists) / updatedStats.totalDeaths
+        : updatedStats.totalKills + updatedStats.totalAssists;
+      updatedStats.winRate = (updatedStats.wins + updatedStats.losses) > 0
+        ? (updatedStats.wins / (updatedStats.wins + updatedStats.losses)) * 100
+        : 0;
+
+      set({
+        playerSeasonStats: state.playerSeasonStats.map((s) =>
+          s.playerId === playerId && s.season === state.season && s.tournament === stats.tournament
+            ? updatedStats
+            : s
+        ),
+      });
+    } else {
+      // 새 통계 생성
+      const newStats: PlayerSeasonStats = {
+        playerId,
+        season: state.season,
+        tournament: stats.tournament || "regularSeason",
+        playedChampions: stats.playedChampions || [],
+        totalDamage: stats.totalDamage || 0,
+        totalGames: stats.totalGames || 1,
+        averageDamage: stats.totalDamage ? stats.totalDamage / (stats.totalGames || 1) : 0,
+        totalKills: stats.totalKills || 0,
+        totalDeaths: stats.totalDeaths || 0,
+        totalAssists: stats.totalAssists || 0,
+        kda: stats.totalDeaths && stats.totalDeaths > 0
+          ? ((stats.totalKills || 0) + (stats.totalAssists || 0)) / stats.totalDeaths
+          : (stats.totalKills || 0) + (stats.totalAssists || 0),
+        wins: stats.wins || 0,
+        losses: stats.losses || 0,
+        winRate: stats.wins !== undefined && stats.losses !== undefined
+          ? (stats.wins / (stats.wins + stats.losses)) * 100
+          : 0,
+      };
+      set({
+        playerSeasonStats: [...state.playerSeasonStats, newStats],
+      });
+    }
+  },
+
+  getPlayerSeasonStats: (playerId: string, tournament?: string) => {
+    const state = get();
+    return state.playerSeasonStats.find(
+      (s) => s.playerId === playerId && s.season === state.season && (!tournament || s.tournament === tournament)
+    );
+  },
+
+  resetSeasonStats: (season: number) => {
+    // 특정 시즌의 통계를 아카이빙하거나 초기화
+    set((state) => ({
+      playerSeasonStats: state.playerSeasonStats.filter((s) => s.season !== season),
     }));
   },
 }));

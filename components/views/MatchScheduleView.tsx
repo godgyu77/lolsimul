@@ -2,13 +2,29 @@
 
 import { useState } from "react";
 import { useGameStore } from "@/store/gameStore";
+import { useUIStore } from "@/store/uiStore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, Trophy } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Calendar, Clock, Trophy, Play, FastForward, SkipForward } from "lucide-react";
 import { cn } from "@/lib/utils";
+import PreMatchModal from "@/components/PreMatchModal";
+import { startInteractiveSimulation } from "@/lib/simulation/engine";
 
 export default function MatchScheduleView() {
-  const { currentTeamId, currentDate, scheduledMatches, upcomingMatches: storeUpcomingMatches, getTeamById } = useGameStore();
+  const { 
+    currentTeamId, 
+    currentDate, 
+    scheduledMatches, 
+    upcomingMatches: storeUpcomingMatches, 
+    getTeamById,
+    currentMatch,
+    simulateOneSet,
+    simulateMatchUntilEnd,
+    simulateTournament,
+    setCurrentMatch,
+  } = useGameStore();
+  const { setPendingMatchId: setUIPendingMatchId, setShowPreMatchModal: setUIShowPreMatchModal } = useUIStore();
   const [selectedDate, setSelectedDate] = useState(currentDate);
 
   // 다가오는 경기 (gameStore.upcomingMatches 우선, 없으면 scheduledMatches에서 필터링)
@@ -91,6 +107,21 @@ export default function MatchScheduleView() {
     worlds: "월즈",
   };
 
+  // 현재 진행 중인 경기
+  const isMatchInProgress = currentMatch && currentMatch.status === "in_progress";
+
+  const handleSimulationControl = (mode: "one_set" | "match" | "tournament") => {
+    if (!currentMatch) return;
+
+    if (mode === "one_set") {
+      simulateOneSet(currentMatch.id);
+    } else if (mode === "match") {
+      simulateMatchUntilEnd(currentMatch.id);
+    } else {
+      simulateTournament();
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -101,6 +132,72 @@ export default function MatchScheduleView() {
           다가오는 경기 일정을 확인하세요.
         </p>
       </div>
+
+      {/* 현재 진행 중인 경기 */}
+      {isMatchInProgress && currentMatch && (
+        <Card className="bg-card border-border border-2 border-primary/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Play className="w-5 h-5 text-cyber-blue animate-pulse" />
+              경기 진행 중
+            </CardTitle>
+            <CardDescription>현재 경기의 시뮬레이션을 제어할 수 있습니다</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* 경기 정보 */}
+              <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30">
+                <div>
+                  <div className="font-semibold text-lg">
+                    {getTeamById(currentMatch.homeTeamId)?.abbreviation} vs{" "}
+                    {getTeamById(currentMatch.awayTeamId)?.abbreviation}
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    {currentMatch.homeScore || 0} - {currentMatch.awayScore || 0}
+                  </div>
+                </div>
+                <Badge variant="outline">
+                  {matchTypeNames[currentMatch.matchType] || currentMatch.matchType}
+                </Badge>
+              </div>
+
+              {/* 시뮬레이션 제어 버튼 */}
+              <div className="grid grid-cols-3 gap-3">
+                <Button
+                  onClick={() => handleSimulationControl("one_set")}
+                  variant="default"
+                  className="h-auto py-4 flex flex-col items-center gap-2"
+                >
+                  <Play className="w-5 h-5" />
+                  <div className="font-semibold">1세트 진행</div>
+                  <div className="text-xs text-muted-foreground">1세트만 시뮬레이션</div>
+                </Button>
+                <Button
+                  onClick={() => handleSimulationControl("match")}
+                  variant="default"
+                  className="h-auto py-4 flex flex-col items-center gap-2"
+                >
+                  <FastForward className="w-5 h-5" />
+                  <div className="font-semibold">매치 종료까지</div>
+                  <div className="text-xs text-muted-foreground">경기 끝까지 진행</div>
+                </Button>
+                <Button
+                  onClick={() => handleSimulationControl("tournament")}
+                  variant="outline"
+                  className="h-auto py-4 flex flex-col items-center gap-2"
+                >
+                  <SkipForward className="w-5 h-5" />
+                  <div className="font-semibold">대회 전체 진행</div>
+                  <div className="text-xs text-muted-foreground">고속 진행</div>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* PreMatchModal */}
+      <PreMatchModal />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 달력 */}
@@ -236,6 +333,21 @@ export default function MatchScheduleView() {
                               })}
                             </span>
                           </div>
+                          {/* 경기 시작 버튼 (내 팀 경기만) */}
+                          {(match.homeTeamId === currentTeamId || match.awayTeamId === currentTeamId) && (
+                            <Button
+                              onClick={() => {
+                                setUIPendingMatchId(match.id);
+                                setUIShowPreMatchModal(true);
+                              }}
+                              size="sm"
+                              variant="default"
+                              className="mt-2"
+                            >
+                              <Play className="w-4 h-4 mr-2" />
+                              경기 시작
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>

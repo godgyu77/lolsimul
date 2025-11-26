@@ -17,6 +17,18 @@ export interface PlayerStats {
   멘탈: number; // 1~100
 }
 
+// 이적 제안 인터페이스
+export interface TransferOffer {
+  id: string; // 제안 ID
+  fromTeamId: string; // 제안한 팀 ID
+  toTeamId: string; // 이적할 팀 ID (현재는 player의 teamId와 동일)
+  salary: number; // 제안 연봉
+  contractYears: number; // 계약 기간 (년)
+  offerDate: Date; // 제안 날짜
+  expiresAt: Date; // 제안 만료일
+  status: "pending" | "accepted" | "rejected" | "expired"; // 제안 상태
+}
+
 // 선수 인터페이스
 export interface Player {
   id: string; // 고유 ID
@@ -28,8 +40,9 @@ export interface Player {
   stats: PlayerStats; // 세부 스탯
   salary: number; // 연봉 (단위: 억원)
   contractEndsAt: number; // 계약만료년도
-  teamId: string; // 소속팀 ID
+  teamId: string; // 소속팀 ID (가변 - 이적 가능)
   division: Division; // 구분 (1군/2군)
+  transferOffers?: TransferOffer[]; // 이적 제안 목록 (선택적)
 }
 
 // 팀 인터페이스
@@ -65,9 +78,12 @@ export interface Match {
   homeTeamId: string;
   awayTeamId: string;
   result?: MatchResult;
-  status: "scheduled" | "completed" | "live";
+  status: "scheduled" | "completed" | "live" | "in_progress"; // in_progress: 세트별 진행 중
   matchType: "regular" | "lck_cup" | "playoff" | "msi" | "worlds"; // 경기 유형
   points?: number; // 승점 (LCK CUP은 2배)
+  currentSets?: Array<{ winner: string; duration: number }>; // 현재까지 진행된 세트들
+  homeScore?: number; // 현재 홈팀 세트 스코어
+  awayScore?: number; // 현재 원정팀 세트 스코어
 }
 
 // 뉴스 인터페이스
@@ -87,7 +103,38 @@ export interface MatchInfo {
   homeTeamId: string;
   awayTeamId: string;
   matchType: Match["matchType"];
-  status: Match["status"];
+  status: Match["status"] | "in_progress";
+}
+
+// 선수별 누적 통계 인터페이스
+export interface PlayerSeasonStats {
+  playerId: string;
+  season: number; // 시즌 년도
+  tournament: string; // 대회 종류 (kespaCup, regularSeason, msi, worlds 등)
+  
+  // 챔피언 사용 기록
+  playedChampions: Array<{
+    championName: string;
+    count: number; // 사용 횟수
+    wins: number; // 승리 횟수
+    losses: number; // 패배 횟수
+  }>;
+  
+  // 누적 스탯
+  totalDamage: number; // 총 딜량
+  totalGames: number; // 총 경기 수
+  averageDamage: number; // 평균 딜량 (totalDamage / totalGames)
+  
+  // KDA 누적
+  totalKills: number;
+  totalDeaths: number;
+  totalAssists: number;
+  kda: number; // (K + A) / D (D가 0이면 K + A)
+  
+  // 추가 통계
+  wins: number;
+  losses: number;
+  winRate: number; // wins / (wins + losses) * 100
 }
 
 // 팀 순위 인터페이스
