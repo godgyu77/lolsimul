@@ -17,15 +17,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+      </head>
       <body className={inter.className}>
         <div className="flex h-screen overflow-hidden bg-background">
           {/* 좌측 사이드바 */}
           <Sidebar />
           
           {/* 메인 컨텐츠 영역 */}
-          <div className="flex flex-col flex-1 overflow-hidden">
+          <div className="flex flex-col flex-1 overflow-hidden w-0 min-w-0">
             {/* 중앙 메인 콘텐츠 - HeaderStatus와 ActionFooter는 page.tsx에서 처리 */}
-            <main className="flex-1 overflow-hidden">
+            <main className="flex-1 overflow-hidden min-h-0">
               {children}
             </main>
           </div>

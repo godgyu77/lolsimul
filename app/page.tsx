@@ -15,6 +15,9 @@ import NewsArchiveView from "@/components/views/NewsArchiveView";
 import StatisticsView from "@/components/views/StatisticsView";
 import FAMarketView from "@/components/views/FAMarketView";
 import SettingsView from "@/components/views/SettingsView";
+import { Menu, MessageSquare, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 // 모달 컴포넌트를 동적 임포트 (SSR 비활성화)
 const ApiKeyModal = dynamic(() => import("@/components/ApiKeyModal"), {
@@ -27,7 +30,7 @@ const TeamSelectionModal = dynamic(() => import("@/components/TeamSelectionModal
 
 export default function Home() {
   const { currentTeamId, apiKey, isLoading } = useGameStore();
-  const { currentView } = useUIStore();
+  const { currentView, isMobileMenuOpen, setIsMobileMenuOpen, isChatOpen, setIsChatOpen } = useUIStore();
   const [isMounted, setIsMounted] = useState(false);
 
   // 클라이언트에서만 마운트 상태 확인
@@ -88,18 +91,51 @@ export default function Home() {
             </div>
           )}
           
+          {/* 모바일 헤더 (햄버거 메뉴 + 채팅 토글) */}
+          <div className="lg:hidden sticky top-0 z-40 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="lg:hidden"
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
+            <h1 className="text-lg font-bold bg-gradient-to-r from-cyber-blue to-cyber-purple bg-clip-text text-transparent">
+              LCK Manager
+            </h1>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsChatOpen(!isChatOpen)}
+              className="lg:hidden relative"
+            >
+              <MessageSquare className="w-5 h-5" />
+              {isChatOpen && (
+                <span className="absolute top-0 right-0 w-2 h-2 bg-primary rounded-full" />
+              )}
+            </Button>
+          </div>
+
           {/* 상단 상태 바 */}
           <HeaderStatus />
 
           {/* 메인 콘텐츠 영역 */}
           <div className="flex flex-1 overflow-hidden min-h-0">
-            {/* 좌측: 대시보드 (70%) */}
-            <div className="flex-[0.7] overflow-y-auto border-r border-border">
+            {/* 좌측: 대시보드 */}
+            <div className={cn(
+              "flex-1 overflow-y-auto",
+              "lg:flex-[0.7] lg:border-r lg:border-border",
+              isChatOpen && "hidden lg:block"
+            )}>
               {renderView()}
             </div>
 
-            {/* 우측: 게임 채팅 인터페이스 (30%) */}
-            <div className="flex-[0.3] min-w-0">
+            {/* 우측: 게임 채팅 인터페이스 */}
+            <div className={cn(
+              "hidden lg:flex lg:flex-[0.3] min-w-0",
+              isChatOpen && "flex flex-col absolute inset-0 z-30 bg-card lg:relative lg:z-auto"
+            )}>
               <GameChatInterface />
             </div>
           </div>

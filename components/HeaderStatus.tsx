@@ -66,46 +66,90 @@ export default function HeaderStatus() {
 
   return (
     <div className="sticky top-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border">
-      <div className="px-6 py-3 flex items-center justify-between">
-        {/* 좌측: 날짜 및 D-Day */}
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-cyber-blue" />
-            <span className="font-mono text-sm">
-              {currentDate.getFullYear()}/{String(currentDate.getMonth() + 1).padStart(2, "0")}/{String(currentDate.getDate()).padStart(2, "0")}
-            </span>
-          </div>
-          {dDay && (
+      <div className="px-3 sm:px-6 py-2 sm:py-3">
+        {/* 데스크톱 레이아웃 */}
+        <div className="hidden md:flex items-center justify-between">
+          {/* 좌측: 날짜 및 D-Day */}
+          <div className="flex items-center gap-4 lg:gap-6">
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-cyber-purple" />
-              <span className="text-sm">
-                <span className="text-muted-foreground">{dDay.event}</span>
-                <span className="ml-2 font-semibold">
-                  D-{dDay.days >= 0 ? dDay.days : `+${Math.abs(dDay.days)}`}
+              <Calendar className="w-4 h-4 text-cyber-blue" />
+              <span className="font-mono text-sm">
+                {currentDate.getFullYear()}/{String(currentDate.getMonth() + 1).padStart(2, "0")}/{String(currentDate.getDate()).padStart(2, "0")}
+              </span>
+            </div>
+            {dDay && (
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-cyber-purple" />
+                <span className="text-sm">
+                  <span className="text-muted-foreground">{dDay.event}</span>
+                  <span className="ml-2 font-semibold">
+                    D-{dDay.days >= 0 ? dDay.days : `+${Math.abs(dDay.days)}`}
+                  </span>
                 </span>
+              </div>
+            )}
+          </div>
+
+          {/* 중앙: 시즌 상태 */}
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-1 bg-primary/10 rounded-md border border-primary/20">
+              <span className="text-sm font-medium text-primary">
+                {seasonEventNames[seasonEvent]}
+              </span>
+            </div>
+          </div>
+
+          {/* 우측: 보유 자금 */}
+          {currentTeam && (
+            <div className="flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-cyber-green" />
+              <span className="font-mono font-semibold text-cyber-green">
+                {(currentTeam.money / 100000000).toFixed(1)}억원
               </span>
             </div>
           )}
         </div>
 
-        {/* 중앙: 시즌 상태 */}
-        <div className="flex items-center gap-2">
-          <div className="px-3 py-1 bg-primary/10 rounded-md border border-primary/20">
-            <span className="text-sm font-medium text-primary">
-              {seasonEventNames[seasonEvent]}
-            </span>
+        {/* 모바일 레이아웃 */}
+        <div className="md:hidden space-y-2">
+          {/* 첫 번째 줄: 날짜와 시즌 */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-cyber-blue" />
+              <span className="font-mono text-xs">
+                {currentDate.getFullYear()}/{String(currentDate.getMonth() + 1).padStart(2, "0")}/{String(currentDate.getDate()).padStart(2, "0")}
+              </span>
+            </div>
+            <div className="px-2 py-1 bg-primary/10 rounded-md border border-primary/20">
+              <span className="text-xs font-medium text-primary">
+                {seasonEventNames[seasonEvent]}
+              </span>
+            </div>
+          </div>
+          
+          {/* 두 번째 줄: D-Day와 자금 */}
+          <div className="flex items-center justify-between">
+            {dDay && (
+              <div className="flex items-center gap-1">
+                <Clock className="w-3 h-3 text-cyber-purple" />
+                <span className="text-xs">
+                  <span className="text-muted-foreground">{dDay.event}</span>
+                  <span className="ml-1 font-semibold">
+                    D-{dDay.days >= 0 ? dDay.days : `+${Math.abs(dDay.days)}`}
+                  </span>
+                </span>
+              </div>
+            )}
+            {currentTeam && (
+              <div className="flex items-center gap-1">
+                <DollarSign className="w-3 h-3 text-cyber-green" />
+                <span className="font-mono text-xs font-semibold text-cyber-green">
+                  {(currentTeam.money / 100000000).toFixed(1)}억원
+                </span>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* 우측: 보유 자금 */}
-        {currentTeam && (
-          <div className="flex items-center gap-2">
-            <DollarSign className="w-4 h-4 text-cyber-green" />
-            <span className="font-mono font-semibold text-cyber-green">
-              {(currentTeam.money / 100000000).toFixed(1)}억원
-            </span>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -24,35 +24,69 @@ export default function ActionFooter() {
 
   return (
     <div className="sticky bottom-0 z-50 bg-card/95 backdrop-blur-sm border-t border-border">
-      <div className="px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="px-3 sm:px-6 py-3 sm:py-4">
+        {/* 데스크톱 레이아웃 */}
+        <div className="hidden md:flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleSchedule}
+              variant="default"
+              className="gap-2"
+            >
+              <Calendar className="w-4 h-4" />
+              일정 진행
+            </Button>
+            <Button
+              onClick={handleRoster}
+              variant="outline"
+              className="gap-2"
+            >
+              <Users className="w-4 h-4" />
+              로스터 관리
+            </Button>
+            <Button
+              onClick={handleFAMarket}
+              variant="outline"
+              className="gap-2"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              FA 시장
+            </Button>
+          </div>
+        </div>
+
+        {/* 모바일 레이아웃 */}
+        <div className="md:hidden flex items-center justify-between gap-2">
           <Button
             onClick={handleSchedule}
             variant="default"
-            className="gap-2"
+            size="sm"
+            className="flex-1 gap-1 text-xs"
           >
-            <Calendar className="w-4 h-4" />
-            일정 진행
+            <Calendar className="w-3 h-3" />
+            <span className="hidden xs:inline">일정 진행</span>
+            <span className="xs:hidden">일정</span>
           </Button>
           <Button
             onClick={handleRoster}
             variant="outline"
-            className="gap-2"
+            size="sm"
+            className="flex-1 gap-1 text-xs"
           >
-            <Users className="w-4 h-4" />
-            로스터 관리
+            <Users className="w-3 h-3" />
+            <span className="hidden xs:inline">로스터</span>
+            <span className="xs:hidden">로스터</span>
           </Button>
           <Button
             onClick={handleFAMarket}
             variant="outline"
-            className="gap-2"
+            size="sm"
+            className="flex-1 gap-1 text-xs"
           >
-            <ShoppingCart className="w-4 h-4" />
-            FA 시장
+            <ShoppingCart className="w-3 h-3" />
+            <span className="hidden xs:inline">FA 시장</span>
+            <span className="xs:hidden">FA</span>
           </Button>
-        </div>
-        <div className="text-xs text-muted-foreground">
-          하단 액션 바
         </div>
       </div>
     </div>
