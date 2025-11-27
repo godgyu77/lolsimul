@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { useGameStore } from "@/store/gameStore";
 import { initialTeams } from "@/constants/initialData";
+import { ROSTER_DB } from "@/constants/systemPrompt";
 import { Button } from "@/components/ui/button";
-import { X, Users, DollarSign, Trophy } from "lucide-react";
+import { X, Users, DollarSign } from "lucide-react";
 import { Team, Player } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -26,30 +27,6 @@ export default function TeamSelectionModal() {
     }
   }, [isMounted, apiKey, currentTeamId]);
 
-  // 종합 스탯 계산
-  const calculateOverall = (player: Player): number => {
-    const stats = player.stats;
-    return Math.round(
-      (stats.라인전 +
-        stats.한타 +
-        stats.운영 +
-        stats.피지컬 +
-        stats.챔프폭 +
-        stats.멘탈) /
-        6
-    );
-  };
-
-  // 팀의 평균 종합 스탯 계산
-  const getTeamAverageOverall = (team: Team): number => {
-    const mainRoster = team.roster.filter((p) => p.division === "1군");
-    if (mainRoster.length === 0) return 0;
-    const total = mainRoster.reduce(
-      (sum, player) => sum + calculateOverall(player),
-      0
-    );
-    return Math.round(total / mainRoster.length);
-  };
 
   // 주요 선수 5명 가져오기 (1군 우선)
   const getMainPlayers = (team: Team): Player[] => {
@@ -152,8 +129,11 @@ export default function TeamSelectionModal() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {initialTeams.map((team) => {
               const isSelected = selectedTeamId === team.id;
-              const avgOverall = getTeamAverageOverall(team);
               const mainPlayers = getMainPlayers(team);
+              
+              // ROSTER_DB에서 정확한 데이터 가져오기
+              const rosterDbTeam = ROSTER_DB[team.id as keyof typeof ROSTER_DB];
+              const teamMoney = rosterDbTeam ? (rosterDbTeam.money * 100000000) : team.money; // ROSTER_DB 우선 사용
 
               return (
                 <div
@@ -177,11 +157,7 @@ export default function TeamSelectionModal() {
                     <div className="text-right">
                       <div className="flex items-center gap-1 text-sm font-semibold text-cyber-green">
                         <DollarSign className="w-4 h-4" />
-                        {(team.money / 100000000).toFixed(0)}억원
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                        <Trophy className="w-3 h-3" />
-                        평균 {avgOverall}
+                        {(teamMoney / 100000000).toFixed(0)}억원
                       </div>
                     </div>
                   </div>
@@ -194,9 +170,16 @@ export default function TeamSelectionModal() {
                     </div>
                     <div className="grid grid-cols-5 gap-2">
                       {mainPlayers.map((player) => {
-                        const overall = calculateOverall(player);
                         const isSTier =
                           player.tier === "S+" || player.tier === "S";
+
+                        // 등급 색상
+                        const getTierColor = (tier: string) => {
+                          if (tier.startsWith("S")) return "text-yellow-400";
+                          if (tier.startsWith("A")) return "text-blue-400";
+                          if (tier.startsWith("B")) return "text-green-400";
+                          return "text-gray-400";
+                        };
 
                         return (
                           <div
@@ -211,11 +194,12 @@ export default function TeamSelectionModal() {
                             >
                               {player.nickname}
                             </div>
-                            <div className="text-[10px] text-muted-foreground">
+                            <div className="text-[10px] text-muted-foreground mb-1">
                               {player.position}
                             </div>
-                            <div className="text-[10px] font-medium mt-0.5">
-                              {overall}
+                            {/* 등급만 표시 */}
+                            <div className={cn("text-[12px] font-bold", getTierColor(player.tier))}>
+                              {player.tier}
                             </div>
                           </div>
                         );

@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import HeaderStatus from "@/components/HeaderStatus";
 import GameChatInterface from "@/components/GameChatInterface";
-import ActionFooter from "@/components/ActionFooter";
 import { useGameStore } from "@/store/gameStore";
 import { useUIStore } from "@/store/uiStore";
 import DashboardView from "@/components/views/DashboardView";
@@ -21,6 +20,35 @@ import TournamentBriefingModal from "@/components/TournamentBriefingModal";
 import SimulationPhaseIndicator from "@/components/SimulationPhaseIndicator";
 import SimulationChoiceModal from "@/components/SimulationChoiceModal";
 import LoadingProgressBar from "@/components/LoadingProgressBar";
+
+// 채팅창 사이드바 컨테이너 (확장 기능 포함)
+function ChatSidebarContainer() {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <>
+      {/* Normal State: 기존 너비 유지 */}
+      {!isExpanded && (
+        <div className="flex flex-col w-[450px] flex-none h-full overflow-hidden border-l border-border">
+          <GameChatInterface 
+            isExpanded={isExpanded} 
+            onToggleExpand={() => setIsExpanded(!isExpanded)} 
+          />
+        </div>
+      )}
+      
+      {/* Expanded State: 오버레이로 전체 화면 덮기 */}
+      {isExpanded && (
+        <div className="absolute right-0 top-0 h-full w-[90%] z-50 bg-card border-l border-border shadow-2xl transition-all duration-300 ease-in-out">
+          <GameChatInterface 
+            isExpanded={isExpanded} 
+            onToggleExpand={() => setIsExpanded(!isExpanded)} 
+          />
+        </div>
+      )}
+    </>
+  );
+}
 
 // 모달 컴포넌트를 동적 임포트 (SSR 비활성화)
 const ApiKeyModal = dynamic(() => import("@/components/ApiKeyModal"), {
@@ -124,6 +152,8 @@ export default function Home() {
       {/* 대회 브리핑 모달 */}
       <TournamentBriefingModal />
       
+      {/* 게임 액션 모달 (선택지 모달) */}
+      
       {/* 3단계: 게임 화면 */}
       {showGame && (
         <div className="flex flex-1 h-full overflow-hidden relative">
@@ -152,7 +182,7 @@ export default function Home() {
           </div>
 
           {/* PC 레이아웃: 좌측(대시보드) + 우측(채팅) */}
-          <div className="hidden lg:flex flex-1 h-full overflow-hidden min-w-0">
+          <div className="hidden lg:flex flex-1 h-full overflow-hidden min-w-0 relative">
             {/* 좌측 대시보드 - flex-1로 남은 공간 차지 */}
             <div className="flex flex-col flex-1 h-full overflow-hidden min-w-0">
               {/* 상단 상태 바 */}
@@ -166,14 +196,10 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* 하단 액션 바 */}
-              <ActionFooter />
             </div>
 
-            {/* 우측 채팅창 - 고정 너비 450px */}
-            <div className="flex flex-col w-[450px] flex-none h-full overflow-hidden border-l border-border">
-              <GameChatInterface />
-            </div>
+            {/* 우측 채팅창 - 확장 가능 (absolute 포지셔닝을 위한 relative 부모) */}
+            <ChatSidebarContainer />
           </div>
 
           {/* 모바일 레이아웃: 탭 전환 방식 */}
@@ -198,8 +224,6 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* 하단 액션 바 */}
-                <ActionFooter />
               </div>
             )}
 

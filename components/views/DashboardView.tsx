@@ -90,6 +90,7 @@ export default function DashboardView() {
     lck_cup: "LCK CUP",
     first_stand: "First Stand",
     msi: "MSI",
+    ewc: "EWC",
     summer: "LCK 서머",
     summer_short: "LCK 서머 (단축)",
     asian_games: "아시안게임",
@@ -273,7 +274,6 @@ export default function DashboardView() {
                       >
                         {player.nickname}
                       </p>
-                      <p className="text-sm text-muted-foreground">{player.name}</p>
                       <div className="pt-2 border-t border-border">
                         <p className="text-xs text-muted-foreground">등급</p>
                         <p className="text-sm font-semibold">{player.tier}</p>

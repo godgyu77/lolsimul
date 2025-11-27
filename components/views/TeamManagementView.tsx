@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useGameStore } from "@/store/gameStore";
 import PlayerRosterTable from "@/components/PlayerRosterTable";
 import StaffTable from "@/components/StaffTable";
+import PlayerDetailModal from "@/components/PlayerDetailModal";
 import { Users, Users2, Briefcase } from "lucide-react";
 import { Player, PlayerInfo } from "@/types";
 
@@ -75,8 +76,6 @@ export default function TeamManagementView() {
 
   const handlePlayerClick = (playerId: string) => {
     setSelectedPlayerId(playerId);
-    console.log("선수 클릭:", playerId);
-    // TODO: PlayerDetailModal 열기
   };
 
   const handleStaffClick = (staffId: string) => {
@@ -145,6 +144,13 @@ export default function TeamManagementView() {
           />
         </TabsContent>
       </Tabs>
+
+      {/* 선수 상세 모달 */}
+      <PlayerDetailModal
+        playerId={selectedPlayerId}
+        isOpen={!!selectedPlayerId}
+        onClose={() => setSelectedPlayerId(null)}
+      />
     </div>
   );
 }

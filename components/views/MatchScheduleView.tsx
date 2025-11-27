@@ -26,6 +26,7 @@ export default function MatchScheduleView() {
   } = useGameStore();
   const { setPendingMatchId: setUIPendingMatchId, setShowPreMatchModal: setUIShowPreMatchModal } = useUIStore();
   const [selectedDate, setSelectedDate] = useState(currentDate);
+  const [clickedDate, setClickedDate] = useState<Date | null>(null);
 
   // 다가오는 경기 (gameStore.upcomingMatches 우선, 없으면 scheduledMatches에서 필터링)
   // currentDate 이후의 경기만 표시
@@ -65,11 +66,43 @@ export default function MatchScheduleView() {
 
   const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
 
-  // 날짜에 경기가 있는지 확인 (scheduledMatches와 upcomingMatches 모두 확인)
+  // 미래 일정 생성 (12월 전지훈련, 1월 LCK Cup)
+  const generateFutureEvents = () => {
+    const events: Array<{ date: Date; type: string; label: string }> = [];
+    const currentYear = currentDate.getFullYear();
+    
+    // 12월: 전지훈련 (Bootcamp)
+    if (year === currentYear && month === 11) {
+      events.push({
+        date: new Date(currentYear, 11, 15),
+        type: "bootcamp",
+        label: "전지훈련 (Bootcamp)"
+      });
+    }
+    
+    // 1월: LCK Cup (Winter) - 랜덤 대진표 생성
+    if (year === currentYear + 1 && month === 0) {
+      // 1월 첫 주부터 매주 경기 생성
+      for (let week = 0; week < 4; week++) {
+        const matchDate = new Date(currentYear + 1, 0, 7 + week * 7);
+        events.push({
+          date: matchDate,
+          type: "lck_cup",
+          label: "LCK CUP (Winter)"
+        });
+      }
+    }
+    
+    return events;
+  };
+
+  const futureEvents = generateFutureEvents();
+
+  // 날짜에 경기가 있는지 확인 (scheduledMatches, upcomingMatches, futureEvents 모두 확인)
   const hasMatchOnDate = (day: number) => {
     const date = new Date(year, month, day);
     const allMatches = [...scheduledMatches, ...storeUpcomingMatches];
-    return allMatches.some((m) => {
+    const hasScheduledMatch = allMatches.some((m) => {
       const matchDate = new Date(m.date);
       return (
         matchDate.getFullYear() === date.getFullYear() &&
@@ -77,6 +110,39 @@ export default function MatchScheduleView() {
         matchDate.getDate() === date.getDate()
       );
     });
+    
+    const hasFutureEvent = futureEvents.some((e) => {
+      return (
+        e.date.getFullYear() === date.getFullYear() &&
+        e.date.getMonth() === date.getMonth() &&
+        e.date.getDate() === date.getDate()
+      );
+    });
+    
+    return hasScheduledMatch || hasFutureEvent;
+  };
+
+  // 선택된 날짜의 경기 목록 가져오기
+  const getMatchesOnDate = (day: number) => {
+    const date = new Date(year, month, day);
+    const allMatches = [...scheduledMatches, ...storeUpcomingMatches].filter((m) => {
+      const matchDate = new Date(m.date);
+      return (
+        matchDate.getFullYear() === date.getFullYear() &&
+        matchDate.getMonth() === date.getMonth() &&
+        matchDate.getDate() === date.getDate()
+      );
+    });
+    
+    const eventsOnDate = futureEvents.filter((e) => {
+      return (
+        e.date.getFullYear() === date.getFullYear() &&
+        e.date.getMonth() === date.getMonth() &&
+        e.date.getDate() === date.getDate()
+      );
+    });
+    
+    return { matches: allMatches, events: eventsOnDate };
   };
 
   // 이전/다음 달 이동
@@ -252,14 +318,18 @@ export default function MatchScheduleView() {
                   const isToday =
                     date.toDateString() === currentDate.toDateString();
                   const hasMatch = hasMatchOnDate(day);
+                  const isClicked = clickedDate && date.toDateString() === clickedDate.toDateString();
 
                   return (
                     <button
                       key={day}
+                      onClick={() => hasMatch && setClickedDate(date)}
                       className={cn(
                         "aspect-square rounded border transition-colors text-sm",
                         isToday
                           ? "bg-primary text-primary-foreground border-primary"
+                          : isClicked
+                          ? "bg-cyber-purple/30 border-cyber-purple"
                           : hasMatch
                           ? "bg-cyber-blue/20 border-cyber-blue hover:bg-cyber-blue/30"
                           : "border-border hover:bg-muted",
@@ -280,19 +350,65 @@ export default function MatchScheduleView() {
           </CardContent>
         </Card>
 
-        {/* 다가오는 경기 리스트 */}
+        {/* 다가오는 경기 리스트 / 선택된 날짜의 경기 */}
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Trophy className="w-5 h-5 text-cyber-purple" />
-              다가오는 경기
+              {clickedDate ? "선택된 날짜의 경기" : "다가오는 경기"}
             </CardTitle>
-            <CardDescription>예정된 경기 일정</CardDescription>
+            <CardDescription>
+              {clickedDate 
+                ? clickedDate.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
+                : "예정된 경기 일정"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            {upcomingMatches.length > 0 ? (
-              <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                {upcomingMatches.map((match) => {
+            {(() => {
+              // 클릭된 날짜가 있으면 해당 날짜의 경기만 표시
+              const displayMatches = clickedDate 
+                ? getMatchesOnDate(clickedDate.getDate()).matches
+                : upcomingMatches;
+              
+              const displayEvents = clickedDate
+                ? getMatchesOnDate(clickedDate.getDate()).events
+                : [];
+
+              if (displayMatches.length === 0 && displayEvents.length === 0) {
+                return (
+                  <div className="text-center py-8 text-muted-foreground">
+                    {clickedDate ? "해당 날짜에 예정된 경기가 없습니다." : "예정된 경기가 없습니다"}
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                  {/* 이벤트 표시 */}
+                  {displayEvents.map((event, idx) => (
+                    <div
+                      key={`event-${idx}`}
+                      className="p-4 rounded-lg border border-cyber-blue bg-cyber-blue/10"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge variant="outline" className="text-xs border-cyber-blue text-cyber-blue">
+                          {event.type === "bootcamp" ? "전지훈련" : "LCK CUP"}
+                        </Badge>
+                      </div>
+                      <div className="font-semibold text-lg">{event.label}</div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        {event.date.toLocaleDateString("ko-KR", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                          weekday: "short",
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {/* 경기 표시 */}
+                  {displayMatches.map((match) => {
                   const homeTeam = getTeamById(match.homeTeamId);
                   const awayTeam = getTeamById(match.awayTeamId);
                   const isHome = match.homeTeamId === currentTeamId;
@@ -352,13 +468,10 @@ export default function MatchScheduleView() {
                       </div>
                     </div>
                   );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                예정된 경기가 없습니다
-              </div>
-            )}
+                  })}
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       </div>

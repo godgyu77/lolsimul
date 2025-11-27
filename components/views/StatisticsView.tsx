@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useGameStore } from "@/store/gameStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,21 @@ import { Trophy, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Team, PlayerSeasonStats } from "@/types";
 
-type TournamentKey = "kespaCup" | "lckCup" | "regularSeason" | "summer" | "playoff" | "msi" | "worlds";
+type TournamentKey = "all" | "kespaCup" | "lckCup" | "firstStand" | "regularSeason" | "summer" | "playoff" | "msi" | "ewc" | "worlds";
+
+// 선수별 통계 가져오기 (현재 시즌, 선택된 대회) - 상수이므로 컴포넌트 외부로 이동
+const TOURNAMENT_KEY_MAP: Record<TournamentKey, string> = {
+  all: "all", // 전체는 필터링에서 제외
+  kespaCup: "kespaCup",
+  lckCup: "lckCup",
+  firstStand: "firstStand",
+  regularSeason: "regularSeason",
+  summer: "summer",
+  playoff: "playoff",
+  msi: "msi",
+  ewc: "ewc",
+  worlds: "worlds",
+};
 
 export default function StatisticsView() {
   const { 
@@ -22,33 +36,54 @@ export default function StatisticsView() {
     getPlayerById,
     season
   } = useGameStore();
-  const [selectedTournament, setSelectedTournament] = useState<TournamentKey>("regularSeason");
+  const [selectedTournament, setSelectedTournament] = useState<TournamentKey>("all");
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"kda" | "averageDamage" | "winRate" | "totalGames">("kda");
 
   // 대회별 라벨 매핑
   const tournamentLabels: Record<TournamentKey, string> = {
+    all: "전체",
     kespaCup: "KeSPA Cup",
     lckCup: "LCK CUP",
+    firstStand: "First Stand",
     regularSeason: "정규 시즌",
     summer: "서머",
     playoff: "플레이오프",
     msi: "MSI",
-    worlds: "월즈",
+    ewc: "EWC",
+    worlds: "Worlds",
   };
 
   // 현재 시즌 이벤트 확인
   const currentEvent = getCurrentSeasonEvent();
   
-  // 데이터가 있거나 진행 중인 대회만 표시
+  // 항상 표시할 기본 대회 목록 (시즌 진행 순서대로)
+  const defaultTournaments: Array<{ key: TournamentKey; label: string }> = [
+    { key: "all", label: "전체" },
+    { key: "kespaCup", label: "KeSPA Cup" },
+    { key: "firstStand", label: "First Stand" },
+    { key: "regularSeason", label: "정규 시즌" },
+    { key: "msi", label: "MSI" },
+    { key: "ewc", label: "EWC" },
+    { key: "worlds", label: "Worlds" },
+  ];
+  
+  // 데이터가 있거나 진행 중인 대회 확인 (필터링용)
   const availableTournaments: Array<{ key: TournamentKey; label: string }> = [];
   
   // 각 대회별로 데이터가 있거나 진행 중인지 확인
-  Object.keys(rankings).forEach((key) => {
+  defaultTournaments.forEach(({ key, label }) => {
     const tournamentKey = key as TournamentKey;
-    const tournamentData = rankings[tournamentKey];
+    
+    // "all"은 rankings에 없으므로 건너뛰기
+    if (tournamentKey === "all") {
+      availableTournaments.push({ key: tournamentKey, label });
+      return;
+    }
+    
+    const tournamentData = rankings[tournamentKey as keyof typeof rankings];
     
     // 데이터가 있거나 (순위표에 실제 데이터가 있음)
-    // 또는 현재 진행 중인 대회인지 확인
     const hasData = tournamentData && tournamentData.length > 0 && 
                     tournamentData.some(r => r.wins > 0 || r.losses > 0);
     
@@ -56,26 +91,19 @@ export default function StatisticsView() {
     const isActive = 
       (currentEvent === "kespa" && tournamentKey === "kespaCup") ||
       (currentEvent === "lck_cup" && tournamentKey === "lckCup") ||
+      (currentEvent === "first_stand" && tournamentKey === "firstStand") ||
       ((currentEvent === "summer" || currentEvent === "summer_short") && tournamentKey === "regularSeason") ||
       (currentEvent === "msi" && tournamentKey === "msi") ||
+      (currentEvent === "ewc" && tournamentKey === "ewc") ||
       (currentEvent === "worlds" && tournamentKey === "worlds") ||
       (tournamentKey === "regularSeason" && (currentEvent === "summer" || currentEvent === "summer_short" || currentEvent === "off_season"));
     
-    if (hasData || isActive) {
-      availableTournaments.push({
-        key: tournamentKey,
-        label: tournamentLabels[tournamentKey],
-      });
-    }
-  });
-
-  // 정규시즌은 항상 표시 (데이터가 없어도)
-  if (!availableTournaments.some(t => t.key === "regularSeason")) {
+    // 항상 표시 (데이터가 없어도 UI는 보여야 함)
     availableTournaments.push({
-      key: "regularSeason",
-      label: "정규 시즌",
+      key: tournamentKey,
+      label,
     });
-  }
+  });
 
   // 선택된 대회가 사용 가능한 대회 목록에 없으면 첫 번째 대회로 변경
   if (!availableTournaments.some(t => t.key === selectedTournament)) {
@@ -84,8 +112,8 @@ export default function StatisticsView() {
     }
   }
 
-  // 선택된 대회의 순위표 가져오기
-  const standings = rankings[selectedTournament] || [];
+  // 선택된 대회의 순위표 가져오기 (전체는 빈 배열)
+  const standings = selectedTournament === "all" ? [] : (rankings[selectedTournament as keyof typeof rankings] || []);
 
   // 대회별 참가 팀 필터링
   const getParticipatingTeams = (tournament: TournamentKey): Team[] => {
@@ -97,6 +125,20 @@ export default function StatisticsView() {
           return teams.filter(t => top2TeamIds.includes(t.id));
         }
         return teams.slice(0, 2); // 순위표가 없으면 임시로 처음 2팀
+      case "firstStand":
+        // First Stand: 국제전 (8팀)
+        if (standings.length > 0) {
+          const top8TeamIds = standings.slice(0, 8).map(s => s.teamId);
+          return teams.filter(t => top8TeamIds.includes(t.id));
+        }
+        return teams.slice(0, 8);
+      case "ewc":
+        // EWC: 국제전 (다양한 리그 참가)
+        if (standings.length > 0) {
+          const topTeamIds = standings.slice(0, 10).map(s => s.teamId);
+          return teams.filter(t => topTeamIds.includes(t.id));
+        }
+        return teams.slice(0, 10);
       case "worlds":
         // 월즈: 상위 3-4팀만
         if (standings.length > 0) {
@@ -117,30 +159,51 @@ export default function StatisticsView() {
 
   const participatingTeams = getParticipatingTeams(selectedTournament);
 
-  // 선수별 통계 가져오기 (현재 시즌, 선택된 대회)
-  const tournamentKeyMap: Record<TournamentKey, string> = {
-    kespaCup: "kespaCup",
-    lckCup: "lckCup",
-    regularSeason: "regularSeason",
-    summer: "summer",
-    playoff: "playoff",
-    msi: "msi",
-    worlds: "worlds",
-  };
+  // 선수별 통계 가져오기 (playerSeasonStats만 사용 - 실제 경기 시뮬레이션 결과)
+  const playerStats = useMemo(() => {
+    // playerSeasonStats에서 선택된 대회의 통계만 필터링
+    // "전체"는 모든 대회 통계 합산
+    const filteredStats = (playerSeasonStats || [])
+      .filter((s) => {
+        if (selectedTournament === "all") {
+          // 전체: 모든 대회 포함
+          return s.season === season;
+        } else {
+          // 특정 대회만 필터링
+          return s.season === season && s.tournament === TOURNAMENT_KEY_MAP[selectedTournament];
+        }
+      })
+      .map((stat) => {
+        const player = getPlayerById(stat.playerId);
+        return {
+          ...stat,
+          player,
+        };
+      })
+      .filter((s) => s.player !== undefined);
 
-  // 선수별 통계 가져오기 (현재 시즌, 선택된 대회)
-  // playerSeasonStats가 undefined일 수 있으므로 기본값 설정
-  const playerStats = (playerSeasonStats || [])
-    .filter((s) => s.season === season && s.tournament === tournamentKeyMap[selectedTournament])
-    .map((stat) => {
-      const player = getPlayerById(stat.playerId);
-      return {
-        ...stat,
-        player,
-      };
-    })
-    .filter((s) => s.player !== undefined)
-    .sort((a, b) => {
+    // 선택된 팀이 있으면 해당 팀 선수만 필터링
+    if (selectedTeamId) {
+      return filteredStats
+        .filter((s) => s.player?.teamId === selectedTeamId)
+        .sort((a, b) => {
+          switch (sortBy) {
+            case "kda":
+              return b.kda - a.kda;
+            case "averageDamage":
+              return b.averageDamage - a.averageDamage;
+            case "winRate":
+              return b.winRate - a.winRate;
+            case "totalGames":
+              return b.totalGames - a.totalGames;
+            default:
+              return 0;
+          }
+        });
+    }
+
+    // 전체 선수 통계
+    return filteredStats.sort((a, b) => {
       switch (sortBy) {
         case "kda":
           return b.kda - a.kda;
@@ -154,6 +217,7 @@ export default function StatisticsView() {
           return 0;
       }
     });
+  }, [selectedTeamId, playerSeasonStats, season, selectedTournament, sortBy, getPlayerById]);
 
   return (
     <div className="p-6 space-y-6">
@@ -166,27 +230,28 @@ export default function StatisticsView() {
         </p>
       </div>
 
-      {/* 참가 팀 리스트 (대회별 필터링) */}
+      {/* 참가 팀 리스트 (클릭 가능) */}
       <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="w-5 h-5 text-yellow-400" />
             참가 팀
           </CardTitle>
-          <CardDescription>
-            {tournamentLabels[selectedTournament]} 참가 팀 목록 ({participatingTeams.length}팀)
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {participatingTeams.map((team) => (
-              <div
+              <button
                 key={team.id}
+                onClick={() => setSelectedTeamId(selectedTeamId === team.id ? null : team.id)}
                 className={cn(
                   "p-3 rounded-lg border text-center transition-colors",
-                  team.id === currentTeamId
-                    ? "bg-primary/10 border-primary"
-                    : "bg-muted/50 border-border"
+                  selectedTeamId === team.id
+                    ? "bg-primary/20 border-primary"
+                    : team.id === currentTeamId
+                    ? "bg-primary/10 border-primary/50"
+                    : "bg-muted/50 border-border hover:bg-muted",
+                  "cursor-pointer"
                 )}
               >
                 <div className="font-semibold text-sm">{team.abbreviation}</div>
@@ -196,7 +261,7 @@ export default function StatisticsView() {
                     내 팀
                   </Badge>
                 )}
-              </div>
+              </button>
             ))}
           </div>
         </CardContent>
@@ -210,7 +275,7 @@ export default function StatisticsView() {
                 <Trophy className="w-5 h-5 text-yellow-400" />
                 선수별 통계
               </CardTitle>
-              <CardDescription>대회별 선수 개인 기록</CardDescription>
+              <CardDescription>대회별 선수 개인 기록 (실제 경기 시뮬레이션 결과)</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <select
@@ -227,6 +292,7 @@ export default function StatisticsView() {
           </div>
         </CardHeader>
         <CardContent>
+          {/* 대회 필터 탭 (선수별 통계 테이블 바로 위로 이동) */}
           <Tabs value={selectedTournament} onValueChange={(value) => setSelectedTournament(value as TournamentKey)}>
             <TabsList className={cn(
               "grid w-full mb-6",
@@ -236,7 +302,9 @@ export default function StatisticsView() {
               availableTournaments.length === 4 && "grid-cols-4",
               availableTournaments.length === 5 && "grid-cols-5",
               availableTournaments.length === 6 && "grid-cols-6",
-              availableTournaments.length >= 7 && "grid-cols-7"
+              availableTournaments.length === 7 && "grid-cols-7",
+              availableTournaments.length === 8 && "grid-cols-8",
+              availableTournaments.length >= 9 && "grid-cols-9"
             )}>
               {availableTournaments.map((tournament) => (
                 <TabsTrigger key={tournament.key} value={tournament.key} className="text-sm">
@@ -249,9 +317,13 @@ export default function StatisticsView() {
               {playerStats.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 px-4">
                   <Clock className="w-16 h-16 text-muted-foreground mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">통계 데이터가 없습니다</h3>
+                  <h3 className="text-xl font-semibold mb-2">
+                    {selectedTeamId ? "해당 팀의 경기 기록이 없습니다" : "통계 데이터가 없습니다"}
+                  </h3>
                   <p className="text-muted-foreground text-center max-w-md">
-                    경기를 진행하면 선수별 통계가 표시됩니다.
+                    {selectedTeamId 
+                      ? "경기를 진행하면 선수별 통계가 표시됩니다."
+                      : "경기를 진행하면 선수별 통계가 표시됩니다."}
                   </p>
                 </div>
               ) : (
@@ -283,11 +355,11 @@ export default function StatisticsView() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {playerStats.map((stat, index) => {
+                      {playerStats.map((stat: any) => {
                         const player = stat.player!;
                         const topChampions = stat.playedChampions
-                          .sort((a, b) => b.count - a.count)
-                          .slice(0, 3);
+                          ? stat.playedChampions.sort((a: any, b: any) => b.count - a.count).slice(0, 3)
+                          : [];
 
                         return (
                           <tr
@@ -311,25 +383,25 @@ export default function StatisticsView() {
                               <Badge variant="outline">{player.position}</Badge>
                             </td>
                             <td className="px-4 py-3 text-center font-medium">
-                              {stat.totalGames}
+                              {stat.totalGames || 0}
                             </td>
                             <td className="px-4 py-3 text-center font-semibold">
-                              {stat.kda.toFixed(2)}
+                              {stat.kda ? stat.kda.toFixed(2) : "0.00"}
                             </td>
                             <td className="px-4 py-3 text-center font-medium">
-                              {stat.averageDamage.toFixed(0)}
+                              {stat.averageDamage ? stat.averageDamage.toFixed(0) : "0"}
                             </td>
                             <td className="px-4 py-3 text-center">
                               <span className={cn(
                                 "font-medium",
                                 stat.winRate >= 60 ? "text-green-400" : stat.winRate >= 50 ? "text-yellow-400" : "text-red-400"
                               )}>
-                                {stat.winRate.toFixed(1)}%
+                                {stat.winRate ? stat.winRate.toFixed(1) : "0.0"}%
                               </span>
                             </td>
                             <td className="px-4 py-3 text-center">
                               <div className="flex flex-wrap gap-1 justify-center">
-                                {topChampions.map((champ) => (
+                                {topChampions.map((champ: any) => (
                                   <Badge key={champ.championName} variant="secondary" className="text-xs">
                                     {champ.championName} ({champ.count})
                                   </Badge>

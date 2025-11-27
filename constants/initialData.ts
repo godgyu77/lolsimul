@@ -319,14 +319,15 @@ const kdfPlayers: Player[] = [
 initialPlayers.push(...kdfPlayers);
 
 // 초기 팀 데이터 생성
-// 각 팀의 자금은 난이도와 모기업 규모에 따라 세분화된 티어로 설정
+// ROSTER_DB의 money 값을 기준으로 설정 (단위: 억원 -> 원으로 변환)
+import { ROSTER_DB } from "./systemPrompt";
+
 export const initialTeams: Team[] = [
-  // God Tier (압도적 자본)
   {
     id: "HLE",
     name: "한화생명e스포츠",
     abbreviation: "HLE",
-    money: 30000000000, // 300억 (Shadow CEO 무제한 지원, 난이도: 최하)
+    money: (ROSTER_DB.HLE?.money || 80.0) * 100000000, // ROSTER_DB 기준: 80억
     fanbaseSize: 85,
     roster: hlePlayers,
   },
@@ -334,7 +335,7 @@ export const initialTeams: Team[] = [
     id: "T1",
     name: "T1",
     abbreviation: "T1",
-    money: 25000000000, // 250억 (글로벌 팬덤 수익, 난이도: 하)
+    money: (ROSTER_DB.T1?.money || 70.0) * 100000000, // ROSTER_DB 기준: 70억
     fanbaseSize: 95,
     roster: t1Players,
   },
@@ -342,16 +343,15 @@ export const initialTeams: Team[] = [
     id: "GEN",
     name: "Gen.G",
     abbreviation: "GEN",
-    money: 20000000000, // 200억 (루럴-쵸비-캐니언 유지 자금, 난이도: 하)
+    money: (ROSTER_DB.GEN?.money || 65.0) * 100000000, // ROSTER_DB 기준: 65억
     fanbaseSize: 80,
     roster: genPlayers,
   },
-  // Platinum Tier (우승권 투자)
   {
     id: "KT",
     name: "KT Rolster",
     abbreviation: "KT",
-    money: 10000000000, // 100억 (전통의 통신사 라이벌, 난이도: 하)
+    money: (ROSTER_DB.KT?.money || 45.0) * 100000000, // ROSTER_DB 기준: 45억
     fanbaseSize: 75,
     roster: ktPlayers,
   },
@@ -359,16 +359,15 @@ export const initialTeams: Team[] = [
     id: "DK",
     name: "Dplus KIA",
     abbreviation: "DK",
-    money: 8000000000, // 80억 (쇼메이커 중심 공격적 투자 가능, 난이도: 중하)
+    money: (ROSTER_DB.DK?.money || 40.0) * 100000000, // ROSTER_DB 기준: 40억
     fanbaseSize: 70,
     roster: dkPlayers,
   },
-  // Gold Tier (플레이오프 ~ 다크호스)
   {
     id: "NS",
     name: "농심 레드포스",
     abbreviation: "NS",
-    money: 6000000000, // 60억 (스카웃-리헨즈 영입으로 예산 증액, 난이도: 중)
+    money: (ROSTER_DB.NS?.money || 28.0) * 100000000, // ROSTER_DB 기준: 28억
     fanbaseSize: 40,
     roster: nsPlayers,
   },
@@ -376,16 +375,15 @@ export const initialTeams: Team[] = [
     id: "KDF",
     name: "DN Freecs",
     abbreviation: "KDF",
-    money: 5000000000, // 50억 (광동제약 안정적 지원, 난이도: 중)
+    money: (ROSTER_DB.DNF?.money || 30.0) * 100000000, // ROSTER_DB 기준: 30억 (DNF)
     fanbaseSize: 50,
     roster: kdfPlayers,
   },
-  // Silver Tier (가성비 운영)
   {
     id: "BFX",
     name: "BNK 피어엑스",
     abbreviation: "BFX",
-    money: 4000000000, // 40억 (금융권 스폰서, 육성과 효율 중시, 난이도: 상)
+    money: (ROSTER_DB.BFX?.money || 25.0) * 100000000, // ROSTER_DB 기준: 25억
     fanbaseSize: 45,
     roster: bfxPlayers,
   },
@@ -393,16 +391,15 @@ export const initialTeams: Team[] = [
     id: "DRX",
     name: "DRX",
     abbreviation: "DRX",
-    money: 3000000000, // 30억 (재정 재건축 단계, 난이도: 상)
+    money: (ROSTER_DB.DRX?.money || 20.0) * 100000000, // ROSTER_DB 기준: 20억
     fanbaseSize: 60,
     roster: drxPlayers,
   },
-  // Bronze Tier (언더독의 반란)
   {
     id: "BRO",
     name: "OK저축은행 브리온",
     abbreviation: "BRO",
-    money: 1500000000, // 15억 (매운맛 난이도, 난이도: 최상)
+    money: (ROSTER_DB.BRO?.money || 15.0) * 100000000, // ROSTER_DB 기준: 15억
     fanbaseSize: 35,
     roster: broPlayers,
   },

@@ -110,9 +110,6 @@ export default function RosterTable({ onPlayerClick }: RosterTableProps) {
                 닉네임
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                이름
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 나이
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -165,9 +162,6 @@ export default function RosterTable({ onPlayerClick }: RosterTableProps) {
                     >
                       {player.nickname}
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">
-                    {player.name}
                   </td>
                   <td className="px-4 py-3 text-sm">{player.age}세</td>
                   <td className="px-4 py-3 text-sm">

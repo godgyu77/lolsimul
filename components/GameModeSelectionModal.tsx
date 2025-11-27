@@ -63,7 +63,8 @@ export default function GameModeSelectionModal() {
         />
       )}
 
-      {/* 게임 모드 선택 모달 */}
+      {/* 게임 모드 선택 모달 - 불러오기 모달이 열려있을 때는 숨김 */}
+      {!showLoadModal && (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
         <div className="bg-card border border-border rounded-lg w-full max-w-2xl p-8 space-y-8">
         {/* 헤더 */}
@@ -135,6 +136,7 @@ export default function GameModeSelectionModal() {
         </div>
         </div>
       </div>
+      )}
     </>
   );
 }

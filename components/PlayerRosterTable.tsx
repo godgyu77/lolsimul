@@ -99,9 +99,6 @@ export default function PlayerRosterTable({ players, onPlayerClick }: PlayerRost
                 닉네임
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                이름
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 나이
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -154,33 +151,14 @@ export default function PlayerRosterTable({ players, onPlayerClick }: PlayerRost
                       {player.nickname}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">
-                    {player.name}
-                  </td>
                   <td className="px-4 py-3 text-sm">{player.age}세</td>
                   <td className="px-4 py-3 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className={cn("font-semibold", getOVRColor(player.overall))}>
-                        {player.overall}
-                      </span>
-                      <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className={cn(
-                            "h-full transition-all",
-                            player.overall >= 90
-                              ? "bg-gradient-to-r from-yellow-400 to-yellow-500"
-                              : player.overall >= 80
-                              ? "bg-blue-400"
-                              : player.overall >= 70
-                              ? "bg-green-400"
-                              : player.overall >= 60
-                              ? "bg-yellow-500"
-                              : "bg-orange-500"
-                          )}
-                          style={{ width: `${player.overall}%` }}
-                        />
-                      </div>
-                    </div>
+                    <Badge
+                      variant="outline"
+                      className={cn("font-semibold text-sm", getTierStyle(player.tier))}
+                    >
+                      {player.tier}
+                    </Badge>
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className={cn("font-medium", condition.color)}>

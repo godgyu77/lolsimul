@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { Player, Team, Match, NewsItem, Position, MatchInfo, TeamRank, PlayerInfo, StaffInfo, Tier, Division, PlayerSeasonStats, PlayerStats } from "@/types";
+import React from "react";
+import { Player, Team, Match, NewsItem, Position, MatchInfo, TeamRank, PlayerInfo, StaffInfo, Tier, Division, PlayerSeasonStats, PlayerStats, PlayerDetailedStats } from "@/types";
 import { initialTeams, initialPlayers } from "@/constants/initialData";
 import { SimulationPhase, SimulationState, WinRateModifier, SimulationChoice } from "@/types/game";
 import { advanceSimulationPhase as engineAdvanceSimulationPhase, submitDecision as engineSubmitDecision } from "@/lib/simulation/engine";
@@ -10,6 +11,7 @@ export type SeasonEvent =
   | "lck_cup"
   | "first_stand"
   | "msi"
+  | "ewc" // Esports World Cup
   | "summer"
   | "summer_short" // 아시안게임 해의 단축 서머
   | "asian_games"
@@ -90,6 +92,15 @@ interface GameState {
   // 선택지 옵션
   currentOptions: Option[]; // 현재 표시할 선택지
 
+  // 게임 액션 (선택지 모달용)
+  availableActions: Array<{
+    id: string;
+    label: string;
+    command: string;
+    variant?: "default" | "outline" | "ghost" | "destructive";
+    icon?: React.ReactNode;
+  }>; // 현재 가능한 행동 목록
+
   // 선수별 시즌 통계
   playerSeasonStats: PlayerSeasonStats[]; // 선수별 누적 통계
 
@@ -107,6 +118,7 @@ interface GameState {
   addMessage: (message: ChatMessage) => void;
   sendCommand: (command: string) => Promise<void>;
   setCurrentOptions: (options: Option[]) => void;
+  setAvailableActions: (actions: Array<{ id: string; label: string; command: string; variant?: "default" | "outline" | "ghost" | "destructive"; icon?: React.ReactNode }>) => void; // 게임 액션 설정
   
   // 게임 진행 제어
   togglePause: () => void;
@@ -166,6 +178,9 @@ interface GameState {
   getPlayerSeasonStats: (playerId: string, tournament?: string) => PlayerSeasonStats | undefined;
   resetSeasonStats: (season: number) => void; // 시즌 초기화
   
+  // 선수 성장/노화 시스템
+  applyPlayerAgingToAll: () => void; // 모든 선수에게 나이 증가 및 노화 적용
+  
   // 저장/불러오기 시스템
   saveGame: (gameMode: "MANAGER" | "PLAYER") => void;
   loadGame: (gameMode: "MANAGER" | "PLAYER") => boolean;
@@ -189,6 +204,9 @@ function getSeasonEvent(date: Date): SeasonEvent {
   if (month >= 1 && month <= 3) return "lck_cup";
   if (month === 3 && day >= 15) return "first_stand";
   if (month === 5) return "msi";
+  
+  // 7월 1주차: EWC (Esports World Cup)
+  if (month === 7 && day <= 7) return "ewc";
   
   // 6~8월: 서머 시즌
   if (month >= 6 && month <= 8) {
@@ -366,6 +384,144 @@ function simulateMatchLogic(
 // 팀의 총 연봉 계산 (억원 단위)
 function calculateTeamSalary(team: Team): number {
   return team.roster.reduce((sum, player) => sum + player.salary, 0);
+}
+
+// 선수 성장/노화 시스템 (프롬프트 규칙: 24세까지 성장, 25세부터 노화)
+function applyPlayerAging(player: Player): Player {
+  const newAge = player.age + 1;
+  let statMultiplier = 1.0;
+
+  // 노화 커브 적용
+  if (newAge <= 24) {
+    // 24세까지: 성장 가능 (경험치에 따라 성장, 여기서는 기본 성장률 적용)
+    statMultiplier = 1.0 + (24 - newAge) * 0.01; // 최대 1.0 (24세 기준)
+  } else if (newAge === 25) {
+    // 25세: 미세 하락
+    statMultiplier = 0.98;
+  } else if (newAge >= 26 && newAge <= 27) {
+    // 26-27세: 미세 하락 지속
+    statMultiplier = 0.96;
+  } else if (newAge >= 28 && newAge <= 29) {
+    // 28-29세: 눈에 띄는 하락
+    statMultiplier = 0.92;
+  } else if (newAge >= 30) {
+    // 30세 이상: 급격한 하락
+    const agePenalty = (newAge - 30) * 0.05; // 30세부터 매년 5% 추가 하락
+    statMultiplier = Math.max(0.7, 0.85 - agePenalty);
+  }
+
+  // 스탯 조정
+  const updatedStats: PlayerStats = {
+    라인전: Math.max(1, Math.min(100, Math.round(player.stats.라인전 * statMultiplier))),
+    한타: Math.max(1, Math.min(100, Math.round(player.stats.한타 * statMultiplier))),
+    운영: Math.max(1, Math.min(100, Math.round(player.stats.운영 * statMultiplier))),
+    피지컬: Math.max(1, Math.min(100, Math.round(player.stats.피지컬 * statMultiplier))),
+    챔프폭: Math.max(1, Math.min(100, Math.round(player.stats.챔프폭 * statMultiplier))),
+    멘탈: Math.max(1, Math.min(100, Math.round(player.stats.멘탈 * statMultiplier))),
+  };
+
+  // 세부 지표도 조정
+  let updatedDetailedStats: PlayerDetailedStats | undefined = undefined;
+  if (player.detailedStats) {
+    updatedDetailedStats = {
+      dpm: Math.max(100, Math.round(player.detailedStats.dpm * statMultiplier)),
+      dmg_pct: Math.max(5, Math.min(35, player.detailedStats.dmg_pct * statMultiplier)),
+      kda_per_min: Math.max(0.1, player.detailedStats.kda_per_min * statMultiplier),
+      solo_kill: Math.max(0, Math.round(player.detailedStats.solo_kill * statMultiplier)),
+      csd15: Math.round(player.detailedStats.csd15 * statMultiplier),
+      gd15: Math.round(player.detailedStats.gd15 * statMultiplier),
+      xpd15: Math.round(player.detailedStats.xpd15 * statMultiplier),
+      fb_part: Math.max(0, Math.min(60, player.detailedStats.fb_part * statMultiplier)),
+      fb_victim: Math.max(5, Math.min(40, player.detailedStats.fb_victim * (2 - statMultiplier))), // 피퍼블은 역방향 (낮을수록 좋음)
+    };
+  }
+
+  // 등급 재계산
+  const overall = Math.round(
+    (updatedStats.라인전 + updatedStats.한타 + updatedStats.운영 + updatedStats.피지컬 + updatedStats.챔프폭 + updatedStats.멘탈) / 6
+  );
+  const getTier = (ovr: number): Tier => {
+    if (ovr >= 95) return "S+";
+    if (ovr >= 90) return "S";
+    if (ovr >= 85) return "S-";
+    if (ovr >= 80) return "A+";
+    if (ovr >= 75) return "A";
+    if (ovr >= 70) return "A-";
+    if (ovr >= 65) return "B+";
+    if (ovr >= 60) return "B";
+    if (ovr >= 55) return "B-";
+    if (ovr >= 50) return "C+";
+    if (ovr >= 45) return "C";
+    if (ovr >= 40) return "C-";
+    return "D";
+  };
+
+  return {
+    ...player,
+    age: newAge,
+    tier: getTier(overall),
+    stats: updatedStats,
+    detailedStats: updatedDetailedStats,
+  };
+}
+
+// 경기 결과에 따른 선수별 세부 지표 계산 (ROSTER_DB 스타일)
+function calculatePlayerMatchStats(
+  player: Player,
+  teamWon: boolean,
+  matchDuration: number,
+  position: Position
+): PlayerDetailedStats {
+  // 선수의 기본 스탯을 기반으로 세부 지표 생성
+  const baseStats = player.detailedStats || {
+    dpm: 400,
+    dmg_pct: 20,
+    kda_per_min: 0.35,
+    solo_kill: 3,
+    csd15: 0,
+    gd15: 0,
+    xpd15: 0,
+    fb_part: 20,
+    fb_victim: 20,
+  };
+
+  // 승리/패배에 따른 변동폭
+  const winMultiplier = teamWon ? 1.1 : 0.9;
+  const randomVariation = () => (Math.random() - 0.5) * 0.2; // -10% ~ +10%
+
+  // 포지션별 기본 범위 조정
+  const getPositionMultiplier = (pos: Position): { dpm: number; dmg_pct: number; kda: number } => {
+    switch (pos) {
+      case "TOP":
+        return { dpm: 1.0, dmg_pct: 1.0, kda: 0.8 };
+      case "JGL":
+        return { dpm: 0.7, dmg_pct: 0.7, kda: 1.2 };
+      case "MID":
+        return { dpm: 1.1, dmg_pct: 1.1, kda: 1.0 };
+      case "ADC":
+        return { dpm: 1.2, dmg_pct: 1.2, kda: 0.9 };
+      case "SPT":
+        return { dpm: 0.4, dmg_pct: 0.4, kda: 1.3 };
+    }
+  };
+
+  const posMult = getPositionMultiplier(position);
+  const variation = randomVariation();
+
+  // 선수 스탯 기반 보정 (라인전, 한타, 운영 등)
+  const statBonus = (player.stats.라인전 + player.stats.한타 + player.stats.운영) / 300; // 0.5 ~ 1.0 범위
+
+  return {
+    dpm: Math.max(100, Math.round(baseStats.dpm * posMult.dpm * winMultiplier * (1 + variation) * (0.7 + statBonus * 0.3))),
+    dmg_pct: Math.max(5, Math.min(35, baseStats.dmg_pct * posMult.dmg_pct * winMultiplier * (1 + variation * 0.5))),
+    kda_per_min: Math.max(0.1, baseStats.kda_per_min * posMult.kda * winMultiplier * (1 + variation * 0.3)),
+    solo_kill: teamWon ? Math.max(0, Math.round(baseStats.solo_kill * (1 + variation * 0.5))) : Math.max(0, Math.round(baseStats.solo_kill * 0.7)),
+    csd15: Math.round(baseStats.csd15 * winMultiplier + (teamWon ? Math.random() * 5 : -Math.random() * 5)),
+    gd15: Math.round(baseStats.gd15 * winMultiplier + (teamWon ? Math.random() * 100 : -Math.random() * 100)),
+    xpd15: Math.round(baseStats.xpd15 * winMultiplier + (teamWon ? Math.random() * 50 : -Math.random() * 50)),
+    fb_part: Math.max(0, Math.min(60, baseStats.fb_part * (1 + variation * 0.3))),
+    fb_victim: Math.max(5, Math.min(40, baseStats.fb_victim * (teamWon ? 0.9 : 1.1) * (1 + variation * 0.2))),
+  };
 }
 
   // 응답 파싱 함수
@@ -612,7 +768,8 @@ function parseAIResponse(response: string, state: GameState): { updates: Partial
             const division = cells[divisionIdx]?.trim() || '';
             const position = cells[lineIdx]?.trim() || '';
             const nickname = cells[nicknameIdx]?.trim() || '';
-            const name = cells[nameIdx]?.trim() || '';
+            // 이름 컬럼은 제거되었으므로 nickname을 name으로도 사용
+            const name = cells[nameIdx]?.trim() || nickname;
             
             // 구분이 '코칭' 또는 '스태프'인 경우
             if (division.includes('코칭') || division.includes('스태프') || division.includes('감독') || division.includes('코치')) {
@@ -829,11 +986,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       timestamp: new Date(),
     },
   ] : [],
-  currentDate: new Date(2025, 11, 1), // 2025년 12월 1일부터 시작
+  currentDate: new Date(2025, 10, 1), // 2025년 11월 1일부터 시작 (월은 0부터 시작: 10 = 11월)
   currentTeamId: "", // 초기값은 빈 문자열 (팀 선택 전)
   gameMode: null, // 초기값은 null (모드 선택 전)
   isPaused: true,
-  season: 2025,
+  season: 2026, // 2026년 시즌 시작 (프롬프트 기준: "2026년 시즌 시작")
   teams: initialTeams,
   players: initialPlayers,
   matches: [],
@@ -869,6 +1026,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
   isLoading: false,
   currentOptions: [],
+  availableActions: [], // 게임 액션 초기값
   playerSeasonStats: [], // 선수별 시즌 통계 초기화
 
   userPlayer: null, // 선수 커리어 모드 캐릭터 초기값
@@ -933,6 +1091,79 @@ export const useGameStore = create<GameState>((set, get) => ({
     
     const tier = getTier(overall);
     
+    // gol.gg 기반 세부 지표 생성 (ROSTER_DB 스타일, 2군 신인 기준)
+    // 포지션별 기본값과 변동폭 설정
+    const getDetailedStats = (pos: Position): PlayerDetailedStats => {
+      const random = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+      const randomFloat = (min: number, max: number) => Math.random() * (max - min) + min;
+      
+      // 포지션별 기본 범위 (ROSTER_DB 2군 선수 데이터 기반)
+      switch (pos) {
+        case "TOP":
+          return {
+            dpm: random(320, 380),
+            dmg_pct: randomFloat(20, 25),
+            kda_per_min: randomFloat(0.20, 0.30),
+            solo_kill: random(1, 4),
+            csd15: random(-8, -3),
+            gd15: random(-60, -30),
+            xpd15: random(-40, -15),
+            fb_part: random(10, 20),
+            fb_victim: random(20, 30),
+          };
+        case "JGL":
+          return {
+            dpm: random(300, 360),
+            dmg_pct: randomFloat(15, 20),
+            kda_per_min: randomFloat(0.30, 0.40),
+            solo_kill: random(0, 3),
+            csd15: random(-5, 0),
+            gd15: random(-40, -10),
+            xpd15: random(-30, -5),
+            fb_part: random(30, 45),
+            fb_victim: random(15, 25),
+          };
+        case "MID":
+          return {
+            dpm: random(380, 450),
+            dmg_pct: randomFloat(22, 28),
+            kda_per_min: randomFloat(0.25, 0.35),
+            solo_kill: random(0, 3),
+            csd15: random(-5, 0),
+            gd15: random(-30, -5),
+            xpd15: random(-25, 0),
+            fb_part: random(15, 30),
+            fb_victim: random(12, 20),
+          };
+        case "ADC":
+          return {
+            dpm: random(350, 420),
+            dmg_pct: randomFloat(24, 30),
+            kda_per_min: randomFloat(0.25, 0.35),
+            solo_kill: random(0, 3),
+            csd15: random(-10, -5),
+            gd15: random(-50, -20),
+            xpd15: random(-30, -10),
+            fb_part: random(8, 15),
+            fb_victim: random(15, 25),
+          };
+        case "SPT":
+          return {
+            dpm: random(140, 200),
+            dmg_pct: randomFloat(7, 12),
+            kda_per_min: randomFloat(0.35, 0.50),
+            solo_kill: 0,
+            csd15: random(-6, -2),
+            gd15: random(-40, -15),
+            xpd15: random(-25, -10),
+            fb_part: random(25, 40),
+            fb_victim: random(18, 28),
+          };
+      }
+    };
+    
+    const detailedStats = getDetailedStats(position);
+    
     // 초기 연봉 (2군 신인 기준)
     const initialSalary = 0.5; // 0.5억원
     
@@ -944,6 +1175,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       age,
       tier,
       stats,
+      detailedStats, // 세부 지표 추가
       salary: initialSalary,
       contractEndsAt: get().season + 2, // 2년 계약
       teamId: "", // 팀 선택 전까지는 빈 문자열
@@ -974,6 +1206,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ currentOptions: options });
   },
 
+  setAvailableActions: (actions: Array<{ id: string; label: string; command: string; variant?: "default" | "outline" | "ghost" | "destructive"; icon?: React.ReactNode }>) => {
+    set({ availableActions: actions });
+  },
+
   sendCommand: async (command: string) => {
     const state = get();
     if (!state.apiKey) {
@@ -989,6 +1225,9 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     // 로딩 상태 시작
     set({ isLoading: true });
+    
+    // 명령어 전송 시 availableActions 초기화 (새로운 응답을 기다림)
+    get().setAvailableActions([]);
 
     // 사용자 메시지 추가
     const userMessage: ChatMessage = {
@@ -1062,10 +1301,17 @@ export const useGameStore = create<GameState>((set, get) => ({
       });
 
       if (!response.ok) {
-        throw new Error(`API 오류: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `API 오류: ${response.status}`);
       }
 
       const data = await response.json();
+      
+      // API에서 오류 응답이 온 경우
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
       const aiResponse = data.response || "응답을 받지 못했습니다.";
 
       // 로딩 메시지 제거
@@ -1087,6 +1333,20 @@ export const useGameStore = create<GameState>((set, get) => ({
 
       // 선택지 업데이트
       set({ currentOptions: options });
+      
+      // options를 availableActions로 변환
+      if (options.length > 0) {
+        const actions = options.map((opt, index) => ({
+          id: `action-${Date.now()}-${index}`,
+          label: opt.label,
+          command: opt.value,
+          variant: "outline" as const, // 모든 버튼을 동일한 variant로 설정 (호버 시에만 하이라이트)
+        }));
+        get().setAvailableActions(actions);
+      } else {
+        // options가 없으면 availableActions도 초기화
+        get().setAvailableActions([]);
+      }
 
       if (Object.keys(updates).length > 0) {
         // rosters 업데이트가 있으면 별도로 처리하고 teams[].roster와 동기화
@@ -1215,10 +1475,11 @@ export const useGameStore = create<GameState>((set, get) => ({
         messages: s.messages.filter((m) => m.id !== loadingId),
       }));
 
+      // 사용자에게 오류 메시지 표시
       const errorMessage: ChatMessage = {
         id: `error-${Date.now()}`,
         type: "system",
-        content: `오류가 발생했습니다: ${error instanceof Error ? error.message : "알 수 없는 오류"}`,
+        content: `❌ ${error instanceof Error ? error.message : "명령 실행 중 오류가 발생했습니다."}`,
         timestamp: new Date(),
       };
       set((s) => ({ messages: [...s.messages, errorMessage] }));
@@ -1236,6 +1497,14 @@ export const useGameStore = create<GameState>((set, get) => ({
       const newDate = new Date(state.currentDate);
       newDate.setDate(newDate.getDate() + 1);
       const newState = { ...state, currentDate: newDate };
+
+      // 연도 변경 체크 (1월 1일) - 선수 노화 적용
+      const oldYear = state.currentDate.getFullYear();
+      const newYear = newDate.getFullYear();
+      if (oldYear !== newYear && newDate.getMonth() === 0 && newDate.getDate() === 1) {
+        // 모든 선수에게 나이 증가 및 노화 적용
+        get().applyPlayerAgingToAll();
+      }
 
       // 월초(1일) 체크 - 경제 시스템 처리
       if (newDate.getDate() === 1) {
@@ -1380,6 +1649,64 @@ export const useGameStore = create<GameState>((set, get) => ({
         const newMatches = [...state.matches, completedMatch];
         const newScheduledMatches = state.scheduledMatches.filter((m) => m.id !== matchId);
 
+        // 선수별 세부 지표 업데이트 (각 세트마다)
+        const tournament = match.matchType === "regular" ? "regularSeason" 
+          : match.matchType === "lck_cup" ? "lckCup"
+          : match.matchType === "playoff" ? "playoff"
+          : match.matchType === "msi" ? "msi"
+          : match.matchType === "worlds" ? "worlds"
+          : "regularSeason";
+
+        // 각 세트별로 선수 통계 업데이트
+        newSets.forEach((set) => {
+          const setWinner = set.winner === homeTeam.id ? homeTeam : awayTeam;
+          const setLoser = set.winner === homeTeam.id ? awayTeam : homeTeam;
+          
+          // 승리팀 선수들 통계 업데이트
+          setWinner.roster.filter((p) => p.division === "1군").forEach((player) => {
+            const matchStats = calculatePlayerMatchStats(player, true, set.duration, player.position);
+            state.updatePlayerSeasonStats(player.id, {
+              tournament,
+              wins: 1,
+              totalDamage: matchStats.dpm * set.duration, // 총 데미지 = dpm * 경기 시간
+              totalKills: Math.round(matchStats.kda_per_min * set.duration * 0.4), // 추정
+              totalDeaths: Math.round(matchStats.kda_per_min * set.duration * 0.2), // 추정
+              totalAssists: Math.round(matchStats.kda_per_min * set.duration * 0.4), // 추정
+              totalDpm: matchStats.dpm,
+              totalDmgPct: matchStats.dmg_pct,
+              totalKdaPerMin: matchStats.kda_per_min,
+              totalSoloKill: matchStats.solo_kill,
+              totalCsd15: matchStats.csd15,
+              totalGd15: matchStats.gd15,
+              totalXpd15: matchStats.xpd15,
+              totalFbPart: matchStats.fb_part,
+              totalFbVictim: matchStats.fb_victim,
+            });
+          });
+
+          // 패배팀 선수들 통계 업데이트
+          setLoser.roster.filter((p) => p.division === "1군").forEach((player) => {
+            const matchStats = calculatePlayerMatchStats(player, false, set.duration, player.position);
+            state.updatePlayerSeasonStats(player.id, {
+              tournament,
+              losses: 1,
+              totalDamage: matchStats.dpm * set.duration,
+              totalKills: Math.round(matchStats.kda_per_min * set.duration * 0.3),
+              totalDeaths: Math.round(matchStats.kda_per_min * set.duration * 0.3),
+              totalAssists: Math.round(matchStats.kda_per_min * set.duration * 0.3),
+              totalDpm: matchStats.dpm,
+              totalDmgPct: matchStats.dmg_pct,
+              totalKdaPerMin: matchStats.kda_per_min,
+              totalSoloKill: matchStats.solo_kill,
+              totalCsd15: matchStats.csd15,
+              totalGd15: matchStats.gd15,
+              totalXpd15: matchStats.xpd15,
+              totalFbPart: matchStats.fb_part,
+              totalFbVictim: matchStats.fb_victim,
+            });
+          });
+        });
+
         // 뉴스 생성
         const loserTeam = winner === homeTeam.id ? awayTeam : homeTeam;
         const news: NewsItem = {
@@ -1398,7 +1725,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             const roleModelNews: NewsItem = {
               id: `rolemodel-pog-${Date.now()}`,
               title: `롤모델 ${pogPlayer.nickname} 선수, POG 수상!`,
-              content: `존경하는 롤모델 ${pogPlayer.nickname}(${pogPlayer.name}) 선수가 ${winnerTeam.name}의 승리에 기여하며 POG를 수상했습니다. 이번 경기를 통해 더 많은 영감을 받았습니다.`,
+              content: `존경하는 롤모델 ${pogPlayer.nickname} 선수가 ${winnerTeam.name}의 승리에 기여하며 POG를 수상했습니다. 이번 경기를 통해 더 많은 영감을 받았습니다.`,
               date: new Date(match.date),
               type: "general",
               relatedTeamIds: [winnerTeam.id],
@@ -1422,7 +1749,7 @@ export const useGameStore = create<GameState>((set, get) => ({
               const roleModelNews: NewsItem = {
                 id: `rolemodel-outperformed-${Date.now()}`,
                 title: `차세대 에이스의 등장! ${state.userPlayer?.nickname} 선수`,
-                content: `신인 ${state.userPlayer?.nickname}(${state.userPlayer?.name}) 선수가 롤모델 ${roleModel.nickname} 선수가 있는 경기에서 POG를 수상하며 주목받고 있습니다. "롤모델을 뛰어넘는 것이 목표였습니다"라고 소감을 밝혔습니다.`,
+                content: `신인 ${state.userPlayer?.nickname} 선수가 롤모델 ${roleModel.nickname} 선수가 있는 경기에서 POG를 수상하며 주목받고 있습니다. "롤모델을 뛰어넘는 것이 목표였습니다"라고 소감을 밝혔습니다.`,
                 date: new Date(match.date),
                 type: "general",
                 relatedTeamIds: [homeTeam.id, awayTeam.id],
@@ -1575,7 +1902,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             roleModelNews.push({
               id: `rolemodel-outperformed-${Date.now()}`,
               title: `차세대 에이스의 등장! ${state.userPlayer?.nickname} 선수`,
-              content: `신인 ${state.userPlayer?.nickname}(${state.userPlayer?.name}) 선수가 롤모델 ${roleModel.nickname} 선수가 있는 경기에서 POG를 수상하며 주목받고 있습니다. "롤모델을 뛰어넘는 것이 목표였습니다"라고 소감을 밝혔습니다.`,
+              content: `신인 ${state.userPlayer?.nickname} 선수가 롤모델 ${roleModel.nickname} 선수가 있는 경기에서 POG를 수상하며 주목받고 있습니다. "롤모델을 뛰어넘는 것이 목표였습니다"라고 소감을 밝혔습니다.`,
               date: new Date(match.date),
               type: "general",
               relatedTeamIds: [homeTeam.id, awayTeam.id],
@@ -1866,8 +2193,19 @@ export const useGameStore = create<GameState>((set, get) => ({
         totalAssists: (stats.totalAssists || 0) + existing.totalAssists,
         wins: (stats.wins || 0) + existing.wins,
         losses: (stats.losses || 0) + existing.losses,
+        // 세부 지표 누적 업데이트
+        totalDpm: (stats.totalDpm || 0) + (existing.totalDpm || 0),
+        totalDmgPct: (stats.totalDmgPct || 0) + (existing.totalDmgPct || 0),
+        totalKdaPerMin: (stats.totalKdaPerMin || 0) + (existing.totalKdaPerMin || 0),
+        totalSoloKill: (stats.totalSoloKill || 0) + (existing.totalSoloKill || 0),
+        totalCsd15: (stats.totalCsd15 || 0) + (existing.totalCsd15 || 0),
+        totalGd15: (stats.totalGd15 || 0) + (existing.totalGd15 || 0),
+        totalXpd15: (stats.totalXpd15 || 0) + (existing.totalXpd15 || 0),
+        totalFbPart: (stats.totalFbPart || 0) + (existing.totalFbPart || 0),
+        totalFbVictim: (stats.totalFbVictim || 0) + (existing.totalFbVictim || 0),
       };
       
+      // 평균 계산
       updatedStats.averageDamage = updatedStats.totalGames > 0 
         ? updatedStats.totalDamage / updatedStats.totalGames 
         : 0;
@@ -1877,6 +2215,35 @@ export const useGameStore = create<GameState>((set, get) => ({
       updatedStats.winRate = (updatedStats.wins + updatedStats.losses) > 0
         ? (updatedStats.wins / (updatedStats.wins + updatedStats.losses)) * 100
         : 0;
+      
+      // 세부 지표 평균 계산
+      updatedStats.averageDpm = updatedStats.totalGames > 0 && updatedStats.totalDpm
+        ? updatedStats.totalDpm / updatedStats.totalGames
+        : updatedStats.averageDpm;
+      updatedStats.averageDmgPct = updatedStats.totalGames > 0 && updatedStats.totalDmgPct
+        ? updatedStats.totalDmgPct / updatedStats.totalGames
+        : updatedStats.averageDmgPct;
+      updatedStats.averageKdaPerMin = updatedStats.totalGames > 0 && updatedStats.totalKdaPerMin
+        ? updatedStats.totalKdaPerMin / updatedStats.totalGames
+        : updatedStats.averageKdaPerMin;
+      updatedStats.averageSoloKill = updatedStats.totalGames > 0 && updatedStats.totalSoloKill !== undefined
+        ? updatedStats.totalSoloKill / updatedStats.totalGames
+        : updatedStats.averageSoloKill;
+      updatedStats.averageCsd15 = updatedStats.totalGames > 0 && updatedStats.totalCsd15 !== undefined
+        ? updatedStats.totalCsd15 / updatedStats.totalGames
+        : updatedStats.averageCsd15;
+      updatedStats.averageGd15 = updatedStats.totalGames > 0 && updatedStats.totalGd15 !== undefined
+        ? updatedStats.totalGd15 / updatedStats.totalGames
+        : updatedStats.averageGd15;
+      updatedStats.averageXpd15 = updatedStats.totalGames > 0 && updatedStats.totalXpd15 !== undefined
+        ? updatedStats.totalXpd15 / updatedStats.totalGames
+        : updatedStats.averageXpd15;
+      updatedStats.averageFbPart = updatedStats.totalGames > 0 && updatedStats.totalFbPart !== undefined
+        ? updatedStats.totalFbPart / updatedStats.totalGames
+        : updatedStats.averageFbPart;
+      updatedStats.averageFbVictim = updatedStats.totalGames > 0 && updatedStats.totalFbVictim !== undefined
+        ? updatedStats.totalFbVictim / updatedStats.totalGames
+        : updatedStats.averageFbVictim;
 
       set({
         playerSeasonStats: state.playerSeasonStats.map((s) =>
@@ -1906,6 +2273,25 @@ export const useGameStore = create<GameState>((set, get) => ({
         winRate: stats.wins !== undefined && stats.losses !== undefined
           ? (stats.wins / (stats.wins + stats.losses)) * 100
           : 0,
+        // 세부 지표 초기화
+        totalDpm: stats.totalDpm || 0,
+        averageDpm: stats.averageDpm || (stats.totalDpm ? stats.totalDpm / (stats.totalGames || 1) : 0),
+        totalDmgPct: stats.totalDmgPct || 0,
+        averageDmgPct: stats.averageDmgPct || (stats.totalDmgPct ? stats.totalDmgPct / (stats.totalGames || 1) : 0),
+        totalKdaPerMin: stats.totalKdaPerMin || 0,
+        averageKdaPerMin: stats.averageKdaPerMin || (stats.totalKdaPerMin ? stats.totalKdaPerMin / (stats.totalGames || 1) : 0),
+        totalSoloKill: stats.totalSoloKill || 0,
+        averageSoloKill: stats.averageSoloKill || (stats.totalSoloKill ? stats.totalSoloKill / (stats.totalGames || 1) : 0),
+        totalCsd15: stats.totalCsd15 || 0,
+        averageCsd15: stats.averageCsd15 || (stats.totalCsd15 !== undefined ? stats.totalCsd15 / (stats.totalGames || 1) : 0),
+        totalGd15: stats.totalGd15 || 0,
+        averageGd15: stats.averageGd15 || (stats.totalGd15 !== undefined ? stats.totalGd15 / (stats.totalGames || 1) : 0),
+        totalXpd15: stats.totalXpd15 || 0,
+        averageXpd15: stats.averageXpd15 || (stats.totalXpd15 !== undefined ? stats.totalXpd15 / (stats.totalGames || 1) : 0),
+        totalFbPart: stats.totalFbPart || 0,
+        averageFbPart: stats.averageFbPart || (stats.totalFbPart !== undefined ? stats.totalFbPart / (stats.totalGames || 1) : 0),
+        totalFbVictim: stats.totalFbVictim || 0,
+        averageFbVictim: stats.averageFbVictim || (stats.totalFbVictim !== undefined ? stats.totalFbVictim / (stats.totalGames || 1) : 0),
       };
       set({
         playerSeasonStats: [...state.playerSeasonStats, newStats],
@@ -1925,6 +2311,32 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => ({
       playerSeasonStats: state.playerSeasonStats.filter((s) => s.season !== season),
     }));
+  },
+
+  // 모든 선수에게 나이 증가 및 노화 적용 (시즌 종료 시 호출)
+  applyPlayerAgingToAll: () => {
+    set((state) => {
+      // 모든 선수에게 노화 적용
+      const updatedPlayers = state.players.map((player) => applyPlayerAging(player));
+      
+      // 팀 로스터도 업데이트
+      const updatedTeams = state.teams.map((team) => ({
+        ...team,
+        roster: team.roster.map((player) => {
+          const updatedPlayer = updatedPlayers.find((p) => p.id === player.id);
+          return updatedPlayer || player;
+        }),
+      }));
+
+      // userPlayer도 업데이트 (선수 커리어 모드)
+      const updatedUserPlayer = state.userPlayer ? applyPlayerAging(state.userPlayer) : null;
+
+      return {
+        players: updatedPlayers,
+        teams: updatedTeams,
+        userPlayer: updatedUserPlayer,
+      };
+    });
   },
 
   // 저장/불러오기 시스템
@@ -2053,7 +2465,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         currentTeamId: data.currentTeamId || "",
         gameMode: data.gameMode || gameMode,
         isPaused: data.isPaused ?? true,
-        season: data.season || 2025,
+        season: data.season || 2026, // 기본값: 2026년 시즌 (프롬프트 기준)
         teams: data.teams || [],
         players: data.players || [],
         matches,

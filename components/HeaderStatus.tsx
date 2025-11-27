@@ -101,6 +101,7 @@ export default function HeaderStatus() {
     lck_cup: "LCK CUP",
     first_stand: "First Stand",
     msi: "MSI",
+    ewc: "EWC",
     summer: "Summer",
     summer_short: "Summer (단축)",
     asian_games: "아시안게임",

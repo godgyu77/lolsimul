@@ -17,6 +17,19 @@ export interface PlayerStats {
   멘탈: number; // 1~100
 }
 
+// gol.gg 기반 세부 지표 (ROSTER_DB 스타일)
+export interface PlayerDetailedStats {
+  dpm: number; // 분당 데미지
+  dmg_pct: number; // 팀 내 데미지 비중 (%)
+  kda_per_min: number; // 분당 킬+어시
+  solo_kill: number; // 솔로킬 횟수
+  csd15: number; // 15분 CS 격차
+  gd15: number; // 15분 골드 격차
+  xpd15: number; // 15분 경험치 격차
+  fb_part: number; // 퍼블 관여율 (%)
+  fb_victim: number; // 피퍼블 확률 (%)
+}
+
 // 이적 제안 인터페이스
 export interface TransferOffer {
   id: string; // 제안 ID
@@ -38,6 +51,7 @@ export interface Player {
   age: number; // 나이
   tier: Tier; // 등급
   stats: PlayerStats; // 세부 스탯
+  detailedStats?: PlayerDetailedStats; // gol.gg 기반 세부 지표 (선택적, ROSTER_DB 스타일)
   salary: number; // 연봉 (단위: 억원)
   contractEndsAt: number; // 계약만료년도
   teamId: string; // 소속팀 ID (가변 - 이적 가능)
@@ -135,6 +149,26 @@ export interface PlayerSeasonStats {
   wins: number;
   losses: number;
   winRate: number; // wins / (wins + losses) * 100
+  
+  // gol.gg 기반 세부 지표 누적 (경기 시뮬레이션 결과)
+  totalDpm?: number; // 총 분당 데미지 (누적)
+  averageDpm?: number; // 평균 분당 데미지
+  totalDmgPct?: number; // 총 팀 내 데미지 비중 (누적)
+  averageDmgPct?: number; // 평균 팀 내 데미지 비중
+  totalKdaPerMin?: number; // 총 분당 KDA (누적)
+  averageKdaPerMin?: number; // 평균 분당 KDA
+  totalSoloKill?: number; // 총 솔로킬 횟수
+  averageSoloKill?: number; // 평균 솔로킬
+  totalCsd15?: number; // 총 15분 CS 격차 (누적)
+  averageCsd15?: number; // 평균 15분 CS 격차
+  totalGd15?: number; // 총 15분 골드 격차 (누적)
+  averageGd15?: number; // 평균 15분 골드 격차
+  totalXpd15?: number; // 총 15분 경험치 격차 (누적)
+  averageXpd15?: number; // 평균 15분 경험치 격차
+  totalFbPart?: number; // 총 퍼블 관여율 (누적)
+  averageFbPart?: number; // 평균 퍼블 관여율
+  totalFbVictim?: number; // 총 피퍼블 확률 (누적)
+  averageFbVictim?: number; // 평균 피퍼블 확률
 }
 
 // 팀 순위 인터페이스

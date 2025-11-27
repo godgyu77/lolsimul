@@ -13,7 +13,6 @@ export default function CharacterCreationModal() {
   const [isOpen, setIsOpen] = useState(false);
   
   const [nickname, setNickname] = useState("");
-  const [name, setName] = useState("");
   const [age, setAge] = useState<number>(17);
   const [position, setPosition] = useState<Position | "">("");
   const [initialTrait, setInitialTrait] = useState<string>("");
@@ -67,11 +66,6 @@ export default function CharacterCreationModal() {
       newErrors.nickname = "닉네임은 20자 이하여야 합니다.";
     }
 
-    if (!name.trim()) {
-      newErrors.name = "실명을 입력해주세요.";
-    } else if (name.length > 10) {
-      newErrors.name = "실명은 10자 이하여야 합니다.";
-    }
 
     if (age < 17 || age > 19) {
       newErrors.age = "나이는 17~19세만 가능합니다.";
@@ -93,7 +87,7 @@ export default function CharacterCreationModal() {
     if (!validateForm()) return;
 
     createUserPlayer({
-      name: name.trim(),
+      name: nickname.trim(), // 닉네임을 name으로도 사용
       nickname: nickname.trim(),
       position: position as Position,
       age,
@@ -146,28 +140,6 @@ export default function CharacterCreationModal() {
             />
             {errors.nickname && (
               <p className="text-sm text-red-400">{errors.nickname}</p>
-            )}
-          </div>
-
-          {/* 실명 */}
-          <div className="space-y-2">
-            <label htmlFor="name" className="block text-white font-semibold text-base">
-              실명 *
-            </label>
-            <input
-              id="name"
-              type="text"
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                if (errors.name) setErrors({ ...errors, name: "" });
-              }}
-              placeholder="예: 류민석"
-              className="w-full px-4 py-3 bg-input font-medium border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-white"
-              maxLength={10}
-            />
-            {errors.name && (
-              <p className="text-sm text-red-400">{errors.name}</p>
             )}
           </div>
 
@@ -269,7 +241,7 @@ export default function CharacterCreationModal() {
               <option value="">롤모델을 선택하지 않음</option>
               {availableRoleModels.map((player) => (
                 <option key={player.id} value={player.id}>
-                  [{player.teamAbbr}] {player.nickname} ({player.name}) - {player.position} ({player.tier})
+                  [{player.teamAbbr}] {player.nickname} - {player.position} ({player.tier})
                 </option>
               ))}
             </select>
@@ -298,7 +270,7 @@ export default function CharacterCreationModal() {
           <Button
             onClick={handleSubmit}
             className="flex-1 gap-2 bg-gradient-to-r from-cyber-blue to-cyber-purple hover:from-cyber-blue/80 hover:to-cyber-purple/80"
-            disabled={!nickname || !name || !position || !initialTrait}
+            disabled={!nickname || !position || !initialTrait}
           >
             <User className="w-4 h-4" />
             캐릭터 생성

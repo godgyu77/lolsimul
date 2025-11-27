@@ -2,17 +2,30 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Send, MessageSquare, X, ClipboardList } from "lucide-react";
+import { Send, MessageSquare, X, ClipboardList, Maximize2, Minimize2, Command, ArrowRight } from "lucide-react";
 import { useGameStore, ChatMessage } from "@/store/gameStore";
 import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { TRAIT_LIBRARY } from "@/constants/systemPrompt";
 
-export default function GameChatInterface() {
-  const { apiKey, messages, sendCommand, news, currentOptions, setCurrentOptions } = useGameStore();
+interface GameChatInterfaceProps {
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
+}
+
+export default function GameChatInterface({ isExpanded = false, onToggleExpand }: GameChatInterfaceProps) {
+  const { apiKey, messages, sendCommand, news, currentOptions, setCurrentOptions, userPlayer, gameMode, availableActions } = useGameStore();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [showActionModal, setShowActionModal] = useState(false);
+  const [internalExpanded, setInternalExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  
+  // 외부에서 제어하는 경우와 내부에서 제어하는 경우 모두 지원
+  const expanded = isExpanded !== undefined ? isExpanded : internalExpanded;
+  const toggleExpand = onToggleExpand || (() => setInternalExpanded(!internalExpanded));
 
   // 메시지가 추가될 때마다 스크롤을 맨 아래로
   useEffect(() => {
@@ -95,6 +108,40 @@ export default function GameChatInterface() {
     }
   };
 
+  // 특성 키를 한글명으로 변환
+  const convertTraitToKorean = (traitKey: string): string => {
+    if (!traitKey || traitKey === '-' || traitKey.trim() === '') return '-';
+    
+    // **로 감싸진 경우 제거
+    let cleanTraitKey = traitKey.replace(/\*\*/g, '').trim();
+    
+    // 여러 특성이 쉼표로 구분된 경우 처리
+    const traits = cleanTraitKey.split(',').map(t => t.trim());
+    const koreanTraits = traits.map(t => {
+      const traitInfo = TRAIT_LIBRARY[t as keyof typeof TRAIT_LIBRARY];
+      // 이미 한글이거나 TRAIT_LIBRARY에 없는 경우 그대로 반환
+      if (traitInfo) {
+        return traitInfo.name;
+      }
+      // 한글인지 확인 (한글이 포함되어 있으면 그대로 반환)
+      if (/[가-힣]/.test(t)) {
+        return t;
+      }
+      return t;
+    });
+    return koreanTraits.join(', ');
+  };
+
+  // 플레이어인지 확인 (닉네임으로 판단)
+  const isUserPlayer = (nickname: string): boolean => {
+    if (gameMode !== "PLAYER" || !userPlayer) return false;
+    if (!nickname) return false;
+    
+    // **로 감싸진 경우와 일반 텍스트 모두 확인
+    const cleanNickname = nickname.replace(/\*\*/g, '').trim();
+    return cleanNickname === userPlayer.nickname;
+  };
+
   // Markdown 테이블을 HTML로 변환
   const renderMarkdownTable = (content: string): string => {
     // 테이블 패턴 찾기: | 컬럼1 | 컬럼2 | ... 형식
@@ -119,6 +166,16 @@ export default function GameChatInterface() {
 
       if (dataRows.length === 0) return match;
 
+      // 특성 컬럼 인덱스 찾기
+      const traitColumnIndex = headerCells.findIndex(cell => 
+        cell.includes('특성') || cell.toLowerCase().includes('trait')
+      );
+      
+      // 닉네임 컬럼 인덱스 찾기
+      const nicknameColumnIndex = headerCells.findIndex(cell => 
+        cell.includes('닉네임') || cell.toLowerCase().includes('nickname')
+      );
+
       // HTML 테이블 생성
       let html = '<div class="overflow-x-auto my-4"><table class="markdown-table whitespace-nowrap">';
       
@@ -134,9 +191,35 @@ export default function GameChatInterface() {
       dataRows.forEach((row, rowIndex) => {
         const isTeam1 = row[0]?.includes('1군');
         const rowClass = isTeam1 ? 'team1' : 'team2';
-        html += `<tr class="${rowClass}">`;
-        row.forEach(cell => {
-          html += `<td class="whitespace-nowrap">${cell}</td>`;
+        
+        // 플레이어인지 확인
+        const nickname = nicknameColumnIndex !== -1 ? row[nicknameColumnIndex] : '';
+        const isPlayer = isUserPlayer(nickname);
+        
+        // 플레이어인 경우 색상 강조 클래스 추가
+        const playerClass = isPlayer ? 'user-player-row' : '';
+        html += `<tr class="${rowClass} ${playerClass}">`;
+        
+        row.forEach((cell, cellIndex) => {
+          let cellContent = cell;
+          
+          // 특성 컬럼인 경우 한글로 변환
+          if (cellIndex === traitColumnIndex && traitColumnIndex !== -1) {
+            cellContent = convertTraitToKorean(cell);
+          }
+          
+          // **로 감싸진 텍스트 제거 (표시용)
+          const displayContent = cellContent.replace(/\*\*/g, '');
+          
+          // 플레이어 행이고 닉네임 컬럼인 경우 색상 강조
+          if (isPlayer && cellIndex === nicknameColumnIndex) {
+            html += `<td class="whitespace-nowrap font-bold" style="color: hsl(280, 70%, 60%);">${displayContent}</td>`;
+          } else if (isPlayer) {
+            // 플레이어 행의 다른 셀도 약간 강조
+            html += `<td class="whitespace-nowrap" style="color: hsl(280, 70%, 70%);">${displayContent}</td>`;
+          } else {
+            html += `<td class="whitespace-nowrap">${displayContent}</td>`;
+          }
         });
         html += '</tr>';
       });
@@ -166,6 +249,19 @@ export default function GameChatInterface() {
             <MessageSquare className="w-5 h-5 text-cyber-blue" />
             <h2 className="text-base sm:text-lg font-bold">게임 진행</h2>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleExpand}
+            className="h-8 w-8"
+            title={expanded ? "축소" : "확장"}
+          >
+            {expanded ? (
+              <Minimize2 className="w-4 h-4" />
+            ) : (
+              <Maximize2 className="w-4 h-4" />
+            )}
+          </Button>
         </div>
       </div>
 
@@ -236,21 +332,20 @@ export default function GameChatInterface() {
 
       {/* 입력 영역 */}
       <div className="p-3 sm:p-4 border-t border-border flex-shrink-0 relative">
-        {/* 플로팅 버튼 (선택지가 있을 때만 표시) - 입력창 위에 배치 */}
-        {currentOptions.length > 0 && (
-          <div className="absolute bottom-full right-4 mb-2 z-40">
+        <div className="flex gap-2 items-end">
+          {/* 작전지시 버튼 (availableActions가 있을 때만 표시) - 좌측 하단 */}
+          {availableActions.length > 0 && (
             <Button
-              onClick={() => setShowOptionsModal(true)}
-              className="h-12 px-5 bg-gradient-to-r from-cyber-blue to-cyber-purple hover:from-cyber-blue/90 hover:to-cyber-purple/90 shadow-lg animate-pulse hover:animate-none transition-all"
-              size="lg"
+              onClick={() => setShowActionModal(true)}
+              variant="outline"
+              size="icon"
+              className="shrink-0 h-10 w-10 sm:h-11 sm:w-11 mb-0 touch-manipulation"
+              title="작전지시"
             >
-              <ClipboardList className="w-5 h-5 mr-2" />
-              <span className="font-semibold">작전 지시</span>
+              <Command className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
-          </div>
-        )}
-        
-        <div className="flex gap-2">
+          )}
+          
           <input
             ref={inputRef}
             type="text"
@@ -270,6 +365,63 @@ export default function GameChatInterface() {
             <Send className="w-4 h-4" />
           </Button>
         </div>
+        
+        {/* 작전지시 모달 */}
+        {availableActions.length > 0 && showActionModal && (
+          <>
+            {/* 배경 오버레이 (외부 클릭 시 닫기) */}
+            <div 
+              className="fixed inset-0 z-[45] bg-black/50 lg:z-40"
+              onClick={() => setShowActionModal(false)}
+            />
+            {/* PC: 좌측 하단, 모바일: 화면 하단 중앙 (하단 탭 메뉴 위에 표시) */}
+            <div className={cn(
+              "fixed z-[50]",
+              // PC: 좌측 하단 (입력창 기준)
+              "lg:absolute lg:bottom-full lg:left-0 lg:mb-2 lg:w-[320px] lg:z-50",
+              // 모바일: 화면 하단 중앙 (하단 탭 메뉴 z-40 위에 표시)
+              "bottom-0 left-0 right-0 lg:right-auto lg:max-w-[calc(100vw-2rem)]",
+              "max-h-[70vh] overflow-y-auto",
+              // 모바일에서 하단 탭 메뉴 높이만큼 여백 추가
+              "pb-16 lg:pb-0"
+            )}>
+              <Card className="bg-card border-border shadow-2xl rounded-t-2xl lg:rounded-lg">
+                <CardContent className="p-4 sm:p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-cyber-blue to-cyber-purple bg-clip-text text-transparent">
+                      작전지시
+                    </h3>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowActionModal(false)}
+                      className="h-8 w-8 sm:h-9 sm:w-9"
+                    >
+                      <X className="w-5 h-5" />
+                    </Button>
+                  </div>
+                  <div className="space-y-2 sm:space-y-3">
+                    {availableActions.map((action) => (
+                      <Button
+                        key={action.id}
+                        onClick={async () => {
+                          setShowActionModal(false);
+                          await sendCommand(action.command);
+                        }}
+                        variant="outline"
+                        className="w-full justify-start gap-2 sm:gap-3 h-auto py-3 sm:py-3.5 px-4 text-sm sm:text-base hover:bg-primary/20 hover:border-primary/50 active:bg-primary/30 transition-colors touch-manipulation"
+                        disabled={isLoading}
+                      >
+                        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                        <span className="flex-1 text-left">{action.label}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
         {!apiKey && (
           <p className="text-xs text-muted-foreground mt-2">
             API 키가 필요합니다.
