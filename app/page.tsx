@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import TournamentBriefingModal from "@/components/TournamentBriefingModal";
 import SimulationPhaseIndicator from "@/components/SimulationPhaseIndicator";
 import SimulationChoiceModal from "@/components/SimulationChoiceModal";
+import LoadingProgressBar from "@/components/LoadingProgressBar";
 
 // 모달 컴포넌트를 동적 임포트 (SSR 비활성화)
 const ApiKeyModal = dynamic(() => import("@/components/ApiKeyModal"), {
@@ -126,20 +127,8 @@ export default function Home() {
       {/* 3단계: 게임 화면 */}
       {showGame && (
         <div className="flex flex-1 h-full overflow-hidden relative">
-          {/* 로딩 오버레이 */}
-          {isLoading && (
-            <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center">
-              <div className="bg-card border border-border rounded-lg p-8 flex flex-col items-center gap-4">
-                <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                <div className="text-lg font-semibold bg-gradient-to-r from-cyber-blue to-cyber-purple bg-clip-text text-transparent">
-                  AI 응답 처리 중...
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  잠시만 기다려주세요
-                </div>
-              </div>
-            </div>
-          )}
+          {/* 로딩 진행 바 */}
+          <LoadingProgressBar isLoading={isLoading} />
           
           {/* 시뮬레이션 페이즈 인디케이터 */}
           <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30 w-full max-w-4xl px-4">

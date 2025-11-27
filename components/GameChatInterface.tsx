@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Send, MessageSquare, X } from "lucide-react";
+import { Send, MessageSquare, X, ClipboardList } from "lucide-react";
 import { useGameStore, ChatMessage } from "@/store/gameStore";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -10,6 +10,7 @@ export default function GameChatInterface() {
   const { apiKey, messages, sendCommand, news, currentOptions, setCurrentOptions } = useGameStore();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -36,6 +37,15 @@ export default function GameChatInterface() {
     }
   }, [news, messages]);
 
+  // currentOptions가 변경될 때 모달 자동 표시 방지
+  useEffect(() => {
+    if (currentOptions.length > 0) {
+      setShowOptionsModal(false); // 새 선택지가 오면 모달은 닫힌 상태로 시작
+    } else {
+      setShowOptionsModal(false); // 선택지가 없으면 모달도 닫음
+    }
+  }, [currentOptions]);
+
   const handleSend = async (command?: string) => {
     const commandToSend = command || input.trim();
     if (!commandToSend || isLoading || !apiKey) return;
@@ -43,6 +53,7 @@ export default function GameChatInterface() {
     setInput("");
     setIsLoading(true);
     setCurrentOptions([]); // 선택지 초기화
+    setShowOptionsModal(false); // 모달도 닫기
 
     try {
       await sendCommand(commandToSend);
@@ -54,7 +65,12 @@ export default function GameChatInterface() {
   };
 
   const handleOptionClick = (value: string) => {
-    handleSend(value);
+    setShowOptionsModal(false); // 모달 닫기
+    handleSend(value); // 선택지 선택 시 선택지 초기화됨
+  };
+
+  const handleCloseModal = () => {
+    setShowOptionsModal(false); // 모달만 닫고 버튼은 유지
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -151,24 +167,6 @@ export default function GameChatInterface() {
             <h2 className="text-base sm:text-lg font-bold">게임 진행</h2>
           </div>
         </div>
-        
-        {/* 데스크탑 선택지 (헤더에 고정) */}
-        {currentOptions.length > 0 && (
-          <div className="hidden lg:flex flex-wrap gap-2 mt-2">
-            {currentOptions.map((option, index) => (
-              <Button
-                key={index}
-                onClick={() => handleOptionClick(option.value)}
-                variant="outline"
-                size="sm"
-                className="text-xs"
-                disabled={isLoading}
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* 메시지 영역 */}
@@ -197,25 +195,25 @@ export default function GameChatInterface() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 모바일 선택지 모달 */}
-      {currentOptions.length > 0 && (
+      {/* 선택지 모달 (PC/모바일 공통) */}
+      {currentOptions.length > 0 && showOptionsModal && (
         <div 
-          className="lg:hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
-              setCurrentOptions([]);
+              handleCloseModal();
             }
           }}
         >
-          <Card className="w-full max-w-md">
+          <Card className="w-full max-w-md bg-card border-border">
             <CardContent className="p-6">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold">선택하세요</h3>
+                <h3 className="text-lg font-semibold text-foreground">작전 지시</h3>
                 <button
-                  onClick={() => setCurrentOptions([])}
-                  className="p-1 hover:bg-accent rounded-lg"
+                  onClick={handleCloseModal}
+                  className="p-1 hover:bg-accent rounded-lg transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5 text-foreground" />
                 </button>
               </div>
               <div className="space-y-2">
@@ -224,7 +222,7 @@ export default function GameChatInterface() {
                     key={index}
                     onClick={() => handleOptionClick(option.value)}
                     variant="default"
-                    className="w-full"
+                    className="w-full bg-gradient-to-r from-cyber-blue to-cyber-purple hover:from-cyber-blue/90 hover:to-cyber-purple/90"
                     disabled={isLoading}
                   >
                     {option.label}
@@ -237,7 +235,21 @@ export default function GameChatInterface() {
       )}
 
       {/* 입력 영역 */}
-      <div className="p-3 sm:p-4 border-t border-border flex-shrink-0">
+      <div className="p-3 sm:p-4 border-t border-border flex-shrink-0 relative">
+        {/* 플로팅 버튼 (선택지가 있을 때만 표시) - 입력창 위에 배치 */}
+        {currentOptions.length > 0 && (
+          <div className="absolute bottom-full right-4 mb-2 z-40">
+            <Button
+              onClick={() => setShowOptionsModal(true)}
+              className="h-12 px-5 bg-gradient-to-r from-cyber-blue to-cyber-purple hover:from-cyber-blue/90 hover:to-cyber-purple/90 shadow-lg animate-pulse hover:animate-none transition-all"
+              size="lg"
+            >
+              <ClipboardList className="w-5 h-5 mr-2" />
+              <span className="font-semibold">작전 지시</span>
+            </Button>
+          </div>
+        )}
+        
         <div className="flex gap-2">
           <input
             ref={inputRef}

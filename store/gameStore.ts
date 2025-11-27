@@ -165,6 +165,12 @@ interface GameState {
   updatePlayerSeasonStats: (playerId: string, stats: Partial<PlayerSeasonStats>) => void;
   getPlayerSeasonStats: (playerId: string, tournament?: string) => PlayerSeasonStats | undefined;
   resetSeasonStats: (season: number) => void; // 시즌 초기화
+  
+  // 저장/불러오기 시스템
+  saveGame: (gameMode: "MANAGER" | "PLAYER") => void;
+  loadGame: (gameMode: "MANAGER" | "PLAYER") => boolean;
+  hasSavedGame: (gameMode: "MANAGER" | "PLAYER") => boolean;
+  deleteSavedGame: (gameMode: "MANAGER" | "PLAYER") => void;
 }
 
 // 아시안게임 개최 여부 확인 (4년 주기: 2026, 2030, 2034...)
@@ -1919,5 +1925,235 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => ({
       playerSeasonStats: state.playerSeasonStats.filter((s) => s.season !== season),
     }));
+  },
+
+  // 저장/불러오기 시스템
+  saveGame: (gameMode: "MANAGER" | "PLAYER") => {
+    if (typeof window === "undefined") return;
+    
+    const state = get();
+    const saveData = {
+      // 게임 기본 정보
+      currentDate: state.currentDate.toISOString(),
+      currentTeamId: state.currentTeamId,
+      gameMode: state.gameMode,
+      isPaused: state.isPaused,
+      season: state.season,
+      
+      // 팀 및 선수 데이터
+      teams: state.teams,
+      players: state.players,
+      
+      // 경기 및 일정
+      matches: state.matches,
+      scheduledMatches: state.scheduledMatches,
+      upcomingMatches: state.upcomingMatches,
+      currentMatch: state.currentMatch,
+      simulationMode: state.simulationMode,
+      
+      // 인터랙티브 시뮬레이션 상태
+      simulationState: state.simulationState,
+      
+      // 뉴스
+      news: state.news,
+      newsHistory: state.newsHistory,
+      
+      // 순위 데이터
+      rankings: state.rankings,
+      
+      // FA 시장
+      faList: state.faList,
+      
+      // 로스터 관리
+      rosters: state.rosters,
+      
+      // 선택지 옵션
+      currentOptions: state.currentOptions,
+      
+      // 선수별 시즌 통계
+      playerSeasonStats: state.playerSeasonStats,
+      
+      // 선수 커리어 모드
+      userPlayer: state.userPlayer,
+      userPlayerInitialTrait: state.userPlayerInitialTrait,
+      userPlayerRoleModelId: state.userPlayerRoleModelId,
+      
+      // 채팅 메시지 (맥락 복원용)
+      messages: state.messages,
+      
+      // 저장 시간
+      savedAt: new Date().toISOString(),
+    };
+    
+    // 모드별로 분리된 저장 키 사용
+    const storageKey = gameMode === "MANAGER" ? "lck_save_manager" : "lck_save_career";
+    localStorage.setItem(storageKey, JSON.stringify(saveData));
+    
+    // 저장 완료 메시지
+    state.addMessage({
+      id: `save-${Date.now()}`,
+      type: "system",
+      content: `게임이 저장되었습니다. (${new Date().toLocaleString("ko-KR")})`,
+      timestamp: new Date(),
+    });
+  },
+
+  loadGame: (gameMode: "MANAGER" | "PLAYER") => {
+    if (typeof window === "undefined") return false;
+    
+    // 모드별로 분리된 저장 키 사용
+    const storageKey = gameMode === "MANAGER" ? "lck_save_manager" : "lck_save_career";
+    const savedData = localStorage.getItem(storageKey);
+    
+    if (!savedData) return false;
+    
+    try {
+      const data = JSON.parse(savedData);
+      
+      // Date 객체 복원
+      const currentDate = new Date(data.currentDate);
+      const savedAt = data.savedAt ? new Date(data.savedAt) : new Date();
+      
+      // 메시지의 timestamp 복원
+      const messages = data.messages?.map((msg: ChatMessage) => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp),
+      })) || [];
+      
+      // 경기 데이터의 날짜 복원
+      const matches = data.matches?.map((match: any) => ({
+        ...match,
+        date: new Date(match.date),
+      })) || [];
+      
+      const scheduledMatches = data.scheduledMatches?.map((match: any) => ({
+        ...match,
+        date: new Date(match.date),
+      })) || [];
+      
+      const upcomingMatches = data.upcomingMatches?.map((match: MatchInfo) => ({
+        ...match,
+        date: new Date(match.date),
+      })) || [];
+      
+      // 뉴스의 날짜 복원
+      const news = data.news?.map((item: NewsItem) => ({
+        ...item,
+        date: new Date(item.date),
+      })) || [];
+      
+      const newsHistory = data.newsHistory?.map((item: NewsItem) => ({
+        ...item,
+        date: new Date(item.date),
+      })) || [];
+      
+      // 상태 복원
+      set({
+        currentDate,
+        currentTeamId: data.currentTeamId || "",
+        gameMode: data.gameMode || gameMode,
+        isPaused: data.isPaused ?? true,
+        season: data.season || 2025,
+        teams: data.teams || [],
+        players: data.players || [],
+        matches,
+        scheduledMatches,
+        upcomingMatches,
+        currentMatch: data.currentMatch ? {
+          ...data.currentMatch,
+          date: new Date(data.currentMatch.date),
+        } : null,
+        simulationMode: data.simulationMode || null,
+        simulationState: data.simulationState || {
+          currentPhase: null,
+          isWaitingForUser: false,
+          winRateModifiers: [],
+          currentChoices: [],
+          matchId: null,
+          currentSet: 0,
+          phaseHistory: [],
+        },
+        news,
+        newsHistory,
+        rankings: data.rankings || {
+          kespaCup: [],
+          lckCup: [],
+          regularSeason: [],
+          summer: [],
+          playoff: [],
+          msi: [],
+          worlds: [],
+        },
+        faList: data.faList || [],
+        rosters: data.rosters || {
+          team1: [],
+          team2: [],
+          staff: [],
+        },
+        currentOptions: data.currentOptions || [],
+        playerSeasonStats: data.playerSeasonStats || [],
+        userPlayer: data.userPlayer || null,
+        userPlayerInitialTrait: data.userPlayerInitialTrait || null,
+        userPlayerRoleModelId: data.userPlayerRoleModelId || null,
+        messages: messages.length > 0 ? messages : [
+          {
+            id: "welcome",
+            type: "system" as const,
+            content: "LCK Manager Simulation에 오신 것을 환영합니다! 게임을 시작하려면 명령어를 입력하세요.",
+            timestamp: new Date(),
+          },
+        ],
+      });
+      
+      // 불러오기 완료 메시지 추가
+      const state = get();
+      state.addMessage({
+        id: `load-${Date.now()}`,
+        type: "system",
+        content: `게임을 불러왔습니다. (저장 시간: ${savedAt.toLocaleString("ko-KR")})`,
+        timestamp: new Date(),
+      });
+      
+      // API 맥락 복원을 위한 시스템 메시지 전송 (비동기)
+      setTimeout(async () => {
+        const currentState = get();
+        if (currentState.apiKey && currentState.currentTeamId) {
+          const contextMessage = `게임을 다시 로드했습니다. 현재 상황은 다음과 같습니다:
+- 날짜: ${currentDate.getFullYear()}/${String(currentDate.getMonth() + 1).padStart(2, "0")}/${String(currentDate.getDate()).padStart(2, "0")}
+- 게임 모드: ${currentState.gameMode === "PLAYER" ? "선수 커리어 모드" : "감독 모드"}
+- 선택된 팀: ${currentState.teams.find(t => t.id === currentState.currentTeamId)?.name || "없음"}
+- 시즌: ${currentState.season}
+- 현재 이벤트: ${getSeasonEvent(currentDate)}
+
+이전 대화 맥락을 이어서 게임을 진행할 수 있도록 준비되었습니다.`;
+          
+          // 시스템 메시지로 추가 (사용자에게는 보이지 않게)
+          try {
+            await currentState.sendCommand(contextMessage);
+          } catch (error) {
+            console.error("맥락 복원 중 오류:", error);
+          }
+        }
+      }, 1000);
+      
+      return true;
+    } catch (error) {
+      console.error("게임 불러오기 오류:", error);
+      return false;
+    }
+  },
+
+  hasSavedGame: (gameMode: "MANAGER" | "PLAYER") => {
+    if (typeof window === "undefined") return false;
+    // 모드별로 분리된 저장 키 사용
+    const storageKey = gameMode === "MANAGER" ? "lck_save_manager" : "lck_save_career";
+    return !!localStorage.getItem(storageKey);
+  },
+
+  deleteSavedGame: (gameMode: "MANAGER" | "PLAYER") => {
+    if (typeof window === "undefined") return;
+    // 모드별로 분리된 저장 키 사용
+    const storageKey = gameMode === "MANAGER" ? "lck_save_manager" : "lck_save_career";
+    localStorage.removeItem(storageKey);
   },
 }));

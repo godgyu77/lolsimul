@@ -4,11 +4,12 @@ import { useState, useEffect } from "react";
 import { useGameStore } from "@/store/gameStore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Key, AlertCircle, RotateCcw, Trash2 } from "lucide-react";
+import { Key, AlertCircle, RotateCcw, Trash2, Save, Check } from "lucide-react";
 import { initialTeams, initialPlayers } from "@/constants/initialData";
 
 export default function SettingsView() {
-  const { apiKey, setApiKey } = useGameStore();
+  const { apiKey, setApiKey, gameMode, saveGame } = useGameStore();
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [inputKey, setInputKey] = useState("");
   const [error, setError] = useState("");
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -58,6 +59,14 @@ export default function SettingsView() {
     setShowResetConfirm(false);
   };
 
+  const handleSaveGame = () => {
+    if (gameMode) {
+      saveGame(gameMode);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -70,6 +79,59 @@ export default function SettingsView() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 게임 저장 */}
+        {gameMode && (
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Save className="w-5 h-5 text-cyber-blue" />
+                게임 저장
+              </CardTitle>
+              <CardDescription>
+                현재 게임 진행 상황을 저장합니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                <p className="text-sm text-muted-foreground">
+                  게임을 저장하면 다음 정보가 저장됩니다:
+                </p>
+                <ul className="mt-2 text-sm text-muted-foreground list-disc list-inside space-y-1">
+                  <li>게임 진행 상태 및 날짜</li>
+                  <li>팀 및 선수 데이터</li>
+                  <li>경기 기록 및 일정</li>
+                  <li>뉴스 및 순위 정보</li>
+                  <li>채팅 메시지 기록</li>
+                </ul>
+              </div>
+              <Button
+                onClick={handleSaveGame}
+                className="w-full gap-2 bg-gradient-to-r from-cyber-blue to-cyber-purple hover:from-cyber-blue/90 hover:to-cyber-purple/90"
+              >
+                {saveSuccess ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    저장 완료!
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    게임 저장
+                  </>
+                )}
+              </Button>
+              {saveSuccess && (
+                <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                  <p className="text-sm text-green-400 flex items-center gap-2">
+                    <Check className="w-4 h-4" />
+                    게임이 성공적으로 저장되었습니다.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* API Key 설정 */}
         <Card className="bg-card border-border">
           <CardHeader>

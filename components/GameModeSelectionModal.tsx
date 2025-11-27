@@ -1,14 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Users, User, Briefcase, Trophy } from "lucide-react";
 import { useGameStore } from "@/store/gameStore";
 
+const LoadGameModal = dynamic(() => import("@/components/LoadGameModal"), {
+  ssr: false,
+});
+
 export default function GameModeSelectionModal() {
-  const { setGameMode, apiKey, gameMode } = useGameStore();
+  const { setGameMode, apiKey, gameMode, hasSavedGame } = useGameStore();
   const [isMounted, setIsMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [showLoadModal, setShowLoadModal] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<"MANAGER" | "PLAYER" | null>(null);
 
   // 클라이언트에서만 마운트 상태 확인
   useEffect(() => {
@@ -23,16 +30,42 @@ export default function GameModeSelectionModal() {
   }, [isMounted, apiKey, gameMode]);
 
   const handleSelectMode = (mode: "MANAGER" | "PLAYER") => {
-    setGameMode(mode);
-    setIsOpen(false);
+    // 항상 모달을 표시 (저장 데이터 유무와 관계없이)
+    setSelectedMode(mode);
+    setShowLoadModal(true);
+  };
+
+  const handleLoadModalClose = () => {
+    setShowLoadModal(false);
+    setSelectedMode(null);
+  };
+
+  const handleNewGame = () => {
+    if (selectedMode) {
+      setGameMode(selectedMode);
+      setIsOpen(false);
+      setShowLoadModal(false);
+      setSelectedMode(null);
+    }
   };
 
   // 서버 사이드 렌더링 시 또는 마운트 전에는 렌더링하지 않음
   if (!isMounted || !isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-card border border-border rounded-lg w-full max-w-2xl p-8 space-y-8">
+    <>
+      {/* 게임 불러오기 모달 */}
+      {showLoadModal && selectedMode && (
+        <LoadGameModal
+          gameMode={selectedMode}
+          onClose={handleLoadModalClose}
+          onNewGame={handleNewGame}
+        />
+      )}
+
+      {/* 게임 모드 선택 모달 */}
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <div className="bg-card border border-border rounded-lg w-full max-w-2xl p-8 space-y-8">
         {/* 헤더 */}
         <div className="text-center space-y-2">
           <h2 className="text-3xl font-bold bg-gradient-to-r from-cyber-blue to-cyber-purple bg-clip-text text-transparent">
@@ -100,8 +133,9 @@ export default function GameModeSelectionModal() {
             모드는 게임 시작 후 변경할 수 없습니다. 신중하게 선택해주세요.
           </p>
         </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
