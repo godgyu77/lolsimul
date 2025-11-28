@@ -182,7 +182,7 @@ interface GameState {
   applyPlayerAgingToAll: () => void; // 모든 선수에게 나이 증가 및 노화 적용
   
   // 저장/불러오기 시스템
-  saveGame: (gameMode: "MANAGER" | "PLAYER") => void;
+  saveGame: (gameMode: "MANAGER" | "PLAYER") => boolean;
   loadGame: (gameMode: "MANAGER" | "PLAYER") => boolean;
   hasSavedGame: (gameMode: "MANAGER" | "PLAYER") => boolean;
   deleteSavedGame: (gameMode: "MANAGER" | "PLAYER") => void;
@@ -563,7 +563,16 @@ function parseAIResponse(response: string, state: GameState): { updates: Partial
   const statusMatch = response.match(/\[STATUS\]\s*날짜:\s*(\d{4})\/(\d{2})\/(\d{2})/);
   if (statusMatch) {
     const [, year, month, day] = statusMatch;
-    updates.currentDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    const parsedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    const currentDate = state.currentDate;
+    
+    // 날짜 역행 방지: 파싱된 날짜가 현재 날짜보다 이전이면 무시
+    if (parsedDate >= currentDate) {
+      updates.currentDate = parsedDate;
+    } else {
+      console.warn(`날짜 역행 방지: 파싱된 날짜(${parsedDate.toISOString()})가 현재 날짜(${currentDate.toISOString()})보다 이전입니다. 날짜 업데이트를 무시합니다.`);
+      // 날짜를 업데이트하지 않음 (현재 날짜 유지)
+    }
   }
   
   // 자금 파싱 (선택적)
@@ -1249,6 +1258,15 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((s) => ({ messages: [...s.messages, loadingMessage] }));
 
     try {
+      // 메시지 히스토리 구성 (최근 20개 메시지, 시스템 메시지 제외)
+      const messageHistory = state.messages
+        .filter((msg) => msg.type !== "system" || msg.content.includes("저장") || msg.content.includes("불러오기"))
+        .slice(-20)
+        .map((msg) => ({
+          role: msg.type === "user" ? "user" : "model",
+          parts: [{ text: msg.content }],
+        }));
+
       // API 호출
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -1258,6 +1276,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         body: JSON.stringify({
           apiKey: state.apiKey,
           command,
+          messageHistory, // 대화 히스토리 전달
           gameState: {
             currentDate: state.currentDate.toISOString(),
             currentTeamId: state.currentTeamId,
@@ -1349,6 +1368,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
 
       if (Object.keys(updates).length > 0) {
+        // 날짜 보호: 업데이트 전 현재 날짜 저장
+        const currentDateBeforeUpdate = state.currentDate;
+        
         // rosters 업데이트가 있으면 별도로 처리하고 teams[].roster와 동기화
         if (updates.rosters) {
           set((s) => {
@@ -1458,13 +1480,49 @@ export const useGameStore = create<GameState>((set, get) => ({
           });
           
           // rosters를 제외한 나머지 업데이트
-          const { rosters, ...otherUpdates } = updates;
-          if (Object.keys(otherUpdates).length > 0) {
+          const { rosters, currentDate: updateDate, ...otherUpdates } = updates;
+          
+          // 날짜 업데이트가 있으면 보호 로직 적용
+          if (updateDate) {
+            set((s) => {
+              // 날짜 역행 방지: 업데이트 날짜가 현재 날짜보다 이전이면 무시
+              if (updateDate >= s.currentDate) {
+                return { ...otherUpdates, currentDate: updateDate };
+              } else {
+                console.warn(`날짜 역행 방지: 업데이트 날짜(${updateDate.toISOString()})가 현재 날짜(${s.currentDate.toISOString()})보다 이전입니다. 날짜를 유지합니다.`);
+                return otherUpdates;
+              }
+            });
+          } else if (Object.keys(otherUpdates).length > 0) {
             set(otherUpdates);
           }
         } else {
-          set(updates);
+          // rosters가 없는 경우: 날짜 보호 로직 적용
+          const { currentDate: updateDate, ...otherUpdates } = updates;
+          
+          if (updateDate) {
+            set((s) => {
+              // 날짜 역행 방지
+              if (updateDate >= s.currentDate) {
+                return { ...otherUpdates, currentDate: updateDate };
+              } else {
+                console.warn(`날짜 역행 방지: 업데이트 날짜(${updateDate.toISOString()})가 현재 날짜(${s.currentDate.toISOString()})보다 이전입니다. 날짜를 유지합니다.`);
+                return otherUpdates;
+              }
+            });
+          } else if (Object.keys(otherUpdates).length > 0) {
+            set(otherUpdates);
+          }
         }
+        
+        // 최종 날짜 검증: 업데이트 후에도 날짜가 역행하지 않았는지 확인
+        set((s) => {
+          if (s.currentDate < currentDateBeforeUpdate) {
+            console.error(`치명적 오류: 날짜가 역행했습니다. ${currentDateBeforeUpdate.toISOString()} -> ${s.currentDate.toISOString()}. 날짜를 복구합니다.`);
+            return { currentDate: currentDateBeforeUpdate };
+          }
+          return {};
+        });
       }
       
       // 로딩 상태 종료
@@ -2341,7 +2399,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   // 저장/불러오기 시스템
   saveGame: (gameMode: "MANAGER" | "PLAYER") => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") return false;
     
     const state = get();
     const saveData = {

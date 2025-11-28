@@ -2,11 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Send, MessageSquare, X, ClipboardList, Maximize2, Minimize2, Command, ArrowRight } from "lucide-react";
+import { Send, MessageSquare, X, ClipboardList, Maximize2, Minimize2, Command, ArrowRight, Menu } from "lucide-react";
 import { useGameStore, ChatMessage } from "@/store/gameStore";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { TRAIT_LIBRARY } from "@/constants/systemPrompt";
+import GameMenuModal from "@/components/GameMenuModal";
 
 interface GameChatInterfaceProps {
   isExpanded?: boolean;
@@ -20,6 +21,7 @@ export default function GameChatInterface({ isExpanded = false, onToggleExpand }
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [showActionModal, setShowActionModal] = useState(false);
   const [internalExpanded, setInternalExpanded] = useState(false);
+  const [showMenuModal, setShowMenuModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   
@@ -96,15 +98,15 @@ export default function GameChatInterface({ isExpanded = false, onToggleExpand }
   const getMessageStyle = (type: ChatMessage["type"]) => {
     switch (type) {
       case "user":
-        return "bg-primary/20 text-white ml-auto";
+        return "bg-gradient-to-r from-cyber-blue/30 to-cyber-blue/20 text-white ml-auto border border-cyber-blue/40 shadow-lg shadow-cyber-blue/10";
       case "news":
-        return "bg-cyber-purple/20 text-white border-l-4 border-cyber-purple";
+        return "bg-gradient-to-r from-cyber-purple/30 to-cyber-purple/20 text-white border-l-4 border-cyber-purple shadow-lg shadow-cyber-purple/10";
       case "game":
-        return "bg-muted/50 text-white";
+        return "bg-card/80 text-foreground border border-border/50 shadow-md";
       case "system":
-        return "bg-muted/50 text-white/80 text-sm";
+        return "bg-muted/60 text-muted-foreground text-sm border border-border/30";
       default:
-        return "bg-muted/50 text-white";
+        return "bg-muted/50 text-foreground border border-border/50";
     }
   };
 
@@ -275,12 +277,12 @@ export default function GameChatInterface({ isExpanded = false, onToggleExpand }
             }`}
           >
             {message.type === "news" && (
-              <div className="text-xs font-semibold mb-1 opacity-70 text-white">뉴스</div>
+              <div className="text-xs font-semibold mb-1 opacity-90 text-cyber-purple-300">📰 뉴스</div>
             )}
-            <div className="whitespace-pre-wrap break-words text-white">
+            <div className="whitespace-pre-wrap break-words text-foreground">
               {renderMessageContent(message.content)}
             </div>
-            <div className="text-xs opacity-50 mt-1 text-white/70">
+            <div className="text-xs opacity-60 mt-1 text-muted-foreground">
               {message.timestamp.toLocaleTimeString("ko-KR", {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -317,8 +319,7 @@ export default function GameChatInterface({ isExpanded = false, onToggleExpand }
                   <Button
                     key={index}
                     onClick={() => handleOptionClick(option.value)}
-                    variant="default"
-                    className="w-full bg-gradient-to-r from-cyber-blue to-cyber-purple hover:from-cyber-blue/90 hover:to-cyber-purple/90"
+                    className="w-full bg-gradient-to-r from-cyber-blue/90 to-cyber-purple/90 hover:from-cyber-blue hover:to-cyber-purple text-white font-semibold border-2 border-cyber-blue/50 hover:border-cyber-blue shadow-lg shadow-cyber-blue/20 transition-all"
                     disabled={isLoading}
                   >
                     {option.label}
@@ -331,20 +332,31 @@ export default function GameChatInterface({ isExpanded = false, onToggleExpand }
       )}
 
       {/* 입력 영역 */}
-      <div className="p-3 sm:p-4 border-t border-border flex-shrink-0 relative">
+      <div className="p-3 sm:p-4 border-t border-border flex-shrink-0 relative bg-card/95 backdrop-blur-sm">
         <div className="flex gap-2 items-end">
-          {/* 작전지시 버튼 (availableActions가 있을 때만 표시) - 좌측 하단 */}
+          {/* 작전지시 버튼 (availableActions가 있을 때만 표시) */}
           {availableActions.length > 0 && (
             <Button
               onClick={() => setShowActionModal(true)}
               variant="outline"
               size="icon"
-              className="shrink-0 h-10 w-10 sm:h-11 sm:w-11 mb-0 touch-manipulation"
+              className="shrink-0 h-11 w-11 sm:h-10 sm:w-10 mb-0 touch-manipulation border-cyber-blue/50 hover:bg-cyber-blue/20 hover:border-cyber-blue"
               title="작전지시"
             >
-              <Command className="w-4 h-4 sm:w-5 sm:h-5" />
+              <Command className="w-5 h-5 sm:w-4 sm:h-4 text-cyber-blue" />
             </Button>
           )}
+          
+          {/* 게임 정보 버튼 (작전지시 버튼 옆에 배치) */}
+          <Button
+            onClick={() => setShowMenuModal(true)}
+            variant="outline"
+            size="icon"
+            className="shrink-0 h-11 w-11 sm:h-10 sm:w-10 mb-0 touch-manipulation border-cyber-purple/50 hover:bg-cyber-purple/20 hover:border-cyber-purple"
+            title="게임 정보"
+          >
+            <Menu className="w-5 h-5 sm:w-4 sm:h-4 text-cyber-purple" />
+          </Button>
           
           <input
             ref={inputRef}
@@ -353,16 +365,16 @@ export default function GameChatInterface({ isExpanded = false, onToggleExpand }
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="명령어 입력..."
-            className="flex-1 px-3 sm:px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+            className="flex-1 px-3 sm:px-4 py-3 sm:py-2.5 bg-background border-2 border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-cyber-blue/50 focus:border-cyber-blue text-base sm:text-sm font-medium text-foreground placeholder:text-muted-foreground/60 touch-manipulation"
             disabled={isLoading || !apiKey}
           />
           <Button
             onClick={() => handleSend()}
             disabled={!input.trim() || isLoading || !apiKey}
             size="icon"
-            className="shrink-0"
+            className="shrink-0 h-11 w-11 sm:h-10 sm:w-10 bg-gradient-to-r from-cyber-blue to-cyber-purple hover:from-cyber-blue/90 hover:to-cyber-purple/90 border-0 shadow-lg shadow-cyber-blue/20 touch-manipulation"
           >
-            <Send className="w-4 h-4" />
+            <Send className="w-5 h-5 sm:w-4 sm:h-4" />
           </Button>
         </div>
         
@@ -401,21 +413,61 @@ export default function GameChatInterface({ isExpanded = false, onToggleExpand }
                     </Button>
                   </div>
                   <div className="space-y-2 sm:space-y-3">
-                    {availableActions.map((action) => (
-                      <Button
-                        key={action.id}
-                        onClick={async () => {
-                          setShowActionModal(false);
-                          await sendCommand(action.command);
-                        }}
-                        variant="outline"
-                        className="w-full justify-start gap-2 sm:gap-3 h-auto py-3 sm:py-3.5 px-4 text-sm sm:text-base hover:bg-primary/20 hover:border-primary/50 active:bg-primary/30 transition-colors touch-manipulation"
-                        disabled={isLoading}
-                      >
-                        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                        <span className="flex-1 text-left">{action.label}</span>
-                      </Button>
-                    ))}
+                    {/* 일정 진행 버튼을 맨 위에 고정 */}
+                    {(() => {
+                      // 일정 진행 관련 액션 찾기
+                      const proceedAction = availableActions.find((action) =>
+                        action.label.includes("일정 진행") || 
+                        action.label.includes("하루 진행") ||
+                        action.command.includes("일정 진행") ||
+                        action.command.includes("하루 진행")
+                      );
+                      
+                      // 나머지 액션들
+                      const otherActions = availableActions.filter((action) => action !== proceedAction);
+                      
+                      return (
+                        <>
+                          {/* 일정 진행 버튼 (강조 스타일) */}
+                          {proceedAction && (
+                            <Button
+                              key={proceedAction.id}
+                              onClick={async () => {
+                                setShowActionModal(false);
+                                await sendCommand(proceedAction.command);
+                              }}
+                              className="w-full justify-start gap-2 sm:gap-3 h-auto py-3 sm:py-3.5 px-4 text-sm sm:text-base bg-orange-500/20 hover:bg-orange-500/30 border-2 border-orange-500/50 hover:border-orange-500 text-orange-300 font-semibold active:bg-orange-500/40 transition-colors touch-manipulation shadow-lg shadow-orange-500/20"
+                              disabled={isLoading}
+                            >
+                              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                              <span className="flex-1 text-left">{proceedAction.label}</span>
+                            </Button>
+                          )}
+                          
+                          {/* 구분선 (일정 진행 버튼이 있을 때만) */}
+                          {proceedAction && otherActions.length > 0 && (
+                            <div className="border-t border-border/50 my-2" />
+                          )}
+                          
+                          {/* 나머지 액션 버튼들 */}
+                          {otherActions.map((action) => (
+                            <Button
+                              key={action.id}
+                              onClick={async () => {
+                                setShowActionModal(false);
+                                await sendCommand(action.command);
+                              }}
+                              variant="outline"
+                              className="w-full justify-start gap-2 sm:gap-3 h-auto py-3 sm:py-3.5 px-4 text-sm sm:text-base hover:bg-primary/20 hover:border-primary/50 active:bg-primary/30 transition-colors touch-manipulation"
+                              disabled={isLoading}
+                            >
+                              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                              <span className="flex-1 text-left">{action.label}</span>
+                            </Button>
+                          ))}
+                        </>
+                      );
+                    })()}
                   </div>
                 </CardContent>
               </Card>
@@ -428,6 +480,12 @@ export default function GameChatInterface({ isExpanded = false, onToggleExpand }
           </p>
         )}
       </div>
+
+      {/* 통합 메뉴 모달 */}
+      <GameMenuModal
+        isOpen={showMenuModal}
+        onClose={() => setShowMenuModal(false)}
+      />
     </div>
   );
 }

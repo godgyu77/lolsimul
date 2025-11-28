@@ -10,7 +10,10 @@ import { Users, Users2, Briefcase } from "lucide-react";
 import { Player, PlayerInfo } from "@/types";
 
 export default function TeamManagementView() {
-  const { rosters, currentTeamId, getTeamById } = useGameStore();
+  const { rosters, currentTeamId, getTeamById, currentDate } = useGameStore();
+  
+  // 날짜 동기화: currentDate가 변경되면 자동으로 리렌더링되어 최신 데이터 표시
+  // currentDate를 의존성으로 사용하여 날짜 변경 시 자동 업데이트
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
 

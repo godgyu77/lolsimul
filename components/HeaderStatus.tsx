@@ -1,7 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useGameStore } from "@/store/gameStore";
-import { Calendar, DollarSign, Clock, Star } from "lucide-react";
+import { Calendar, DollarSign, Clock, Star, Settings, Newspaper } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import SettingsModal from "@/components/SettingsModal";
+import NewsModal from "@/components/NewsModal";
 
 export default function HeaderStatus() {
   const { 
@@ -15,6 +19,8 @@ export default function HeaderStatus() {
     userPlayerRoleModelId,
     players,
   } = useGameStore();
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showNewsModal, setShowNewsModal] = useState(false);
   const currentTeam = getTeamById(currentTeamId);
   const seasonEvent = getCurrentSeasonEvent();
   
@@ -145,29 +151,53 @@ export default function HeaderStatus() {
             </div>
           </div>
 
-          {/* 우측: 보유 자금 또는 선수 정보 */}
-          {gameMode === "PLAYER" && userPlayer ? (
-            <div className="flex items-center gap-4">
-              {roleModel && (
-                <div className="flex items-center gap-2 text-sm">
-                  <Star className="w-4 h-4 text-yellow-400" />
-                  <span className="text-muted-foreground">롤모델:</span>
-                  <span className="font-semibold">{roleModel.nickname}</span>
+          {/* 우측: 보유 자금 또는 선수 정보 + 버튼들 */}
+          <div className="flex items-center gap-3">
+            {gameMode === "PLAYER" && userPlayer ? (
+              <div className="flex items-center gap-4">
+                {roleModel && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Star className="w-4 h-4 text-yellow-400" />
+                    <span className="text-muted-foreground">롤모델:</span>
+                    <span className="font-semibold">{roleModel.nickname}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{userPlayer.nickname}</span>
+                  <span className="text-xs text-muted-foreground">({userPlayer.position})</span>
                 </div>
-              )}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">{userPlayer.nickname}</span>
-                <span className="text-xs text-muted-foreground">({userPlayer.position})</span>
               </div>
-            </div>
-          ) : currentTeam ? (
-            <div className="flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-cyber-green" />
-              <span className="font-mono font-semibold text-cyber-green">
-                {(currentTeam.money / 100000000).toFixed(1)}억원
-              </span>
-            </div>
-          ) : null}
+            ) : currentTeam ? (
+              <div className="flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-cyber-green" />
+                <span className="font-mono font-semibold text-cyber-green">
+                  {(currentTeam.money / 100000000).toFixed(1)}억원
+                </span>
+              </div>
+            ) : null}
+            
+            {/* 뉴스 버튼 */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowNewsModal(true)}
+              className="h-8 w-8"
+              title="뉴스"
+            >
+              <Newspaper className="w-4 h-4" />
+            </Button>
+            
+            {/* 설정 버튼 */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowSettingsModal(true)}
+              className="h-8 w-8"
+              title="설정"
+            >
+              <Settings className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
 
         {/* 모바일 레이아웃 */}
@@ -180,10 +210,33 @@ export default function HeaderStatus() {
                 {currentDate.getFullYear()}/{String(currentDate.getMonth() + 1).padStart(2, "0")}/{String(currentDate.getDate()).padStart(2, "0")}
               </span>
             </div>
-            <div className="px-2 py-1 bg-primary/10 rounded-md border border-primary/20">
-              <span className="text-xs font-medium text-primary">
-                {seasonEventNames[seasonEvent]}
-              </span>
+            <div className="flex items-center gap-2">
+              <div className="px-2 py-1 bg-primary/10 rounded-md border border-primary/20">
+                <span className="text-xs font-medium text-primary">
+                  {seasonEventNames[seasonEvent]}
+                </span>
+              </div>
+              {/* 모바일: 뉴스/설정 버튼 */}
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowNewsModal(true)}
+                  className="h-7 w-7"
+                  title="뉴스"
+                >
+                  <Newspaper className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowSettingsModal(true)}
+                  className="h-7 w-7"
+                  title="설정"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                </Button>
+              </div>
             </div>
           </div>
           
@@ -200,17 +253,34 @@ export default function HeaderStatus() {
                 </span>
               </div>
             )}
-            {currentTeam && (
+            {gameMode === "PLAYER" && userPlayer ? (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground">{userPlayer.nickname}</span>
+                <span className="text-muted-foreground">({userPlayer.position})</span>
+              </div>
+            ) : currentTeam ? (
               <div className="flex items-center gap-1">
                 <DollarSign className="w-3 h-3 text-cyber-green" />
                 <span className="font-mono text-xs font-semibold text-cyber-green">
                   {(currentTeam.money / 100000000).toFixed(1)}억원
                 </span>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
+
+      {/* 설정 모달 */}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+      />
+
+      {/* 뉴스 모달 */}
+      <NewsModal
+        isOpen={showNewsModal}
+        onClose={() => setShowNewsModal(false)}
+      />
     </div>
   );
 }

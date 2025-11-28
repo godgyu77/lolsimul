@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Sidebar from "@/components/layout/Sidebar";
 
 export const metadata: Metadata = {
   title: "LCK Manager Simulation",
@@ -19,10 +18,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <div className="flex h-screen overflow-hidden bg-background">
-          {/* 좌측 네비게이션 - 고정 너비 */}
-          <Sidebar />
-          
-          {/* 중앙 대시보드 + 우측 채팅창 영역 */}
+          {/* 메인 콘텐츠 영역 */}
           <div className="flex flex-1 overflow-hidden min-w-0">
             {children}
           </div>

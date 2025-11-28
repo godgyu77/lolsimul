@@ -41,7 +41,7 @@ async function retryWithBackoff<T>(
 
 export async function POST(request: NextRequest) {
   try {
-    const { apiKey, command, gameState } = await request.json();
+    const { apiKey, command, messageHistory = [], gameState } = await request.json();
 
     // API Key 검증
     if (!apiKey) {
@@ -164,15 +164,19 @@ ${teamRoster.roster
 위 명령을 처리하고 응답하세요. 응답 형식은 시스템 프롬프트의 "II. [UI 렌더링 및 출력 가이드]"를 따라주세요.
 [중요] 로스터를 출력할 때는 반드시 위에 제공된 ROSTER_DB 데이터를 정확히 사용하세요. 임의로 선수 이름을 변경하거나 생성하지 마세요.`;
 
+    // 대화 히스토리와 현재 메시지 결합
+    const contents = [
+      ...messageHistory, // 이전 대화 히스토리
+      {
+        role: "user",
+        parts: [{ text: userMessage }],
+      },
+    ];
+
     // Gemini API 호출 (재시도 로직 포함)
     const result = await retryWithBackoff(async () => {
       return await model.generateContent({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: userMessage }],
-          },
-        ],
+        contents: contents as any,
         generationConfig: {
           temperature: 0.3,
         },

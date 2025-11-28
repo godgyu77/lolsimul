@@ -6,49 +6,10 @@ import HeaderStatus from "@/components/HeaderStatus";
 import GameChatInterface from "@/components/GameChatInterface";
 import { useGameStore } from "@/store/gameStore";
 import { useUIStore } from "@/store/uiStore";
-import DashboardView from "@/components/views/DashboardView";
-import TeamManagementView from "@/components/views/TeamManagementView";
-import MatchScheduleView from "@/components/views/MatchScheduleView";
-import NewsArchiveView from "@/components/views/NewsArchiveView";
-import StatisticsView from "@/components/views/StatisticsView";
-import FAMarketView from "@/components/views/FAMarketView";
-import SettingsView from "@/components/views/SettingsView";
-import { Menu, MessageSquare, X, LayoutDashboard } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import TournamentBriefingModal from "@/components/TournamentBriefingModal";
 import SimulationPhaseIndicator from "@/components/SimulationPhaseIndicator";
 import SimulationChoiceModal from "@/components/SimulationChoiceModal";
 import LoadingProgressBar from "@/components/LoadingProgressBar";
-
-// 채팅창 사이드바 컨테이너 (확장 기능 포함)
-function ChatSidebarContainer() {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  return (
-    <>
-      {/* Normal State: 기존 너비 유지 */}
-      {!isExpanded && (
-        <div className="flex flex-col w-[450px] flex-none h-full overflow-hidden border-l border-border">
-          <GameChatInterface 
-            isExpanded={isExpanded} 
-            onToggleExpand={() => setIsExpanded(!isExpanded)} 
-          />
-        </div>
-      )}
-      
-      {/* Expanded State: 오버레이로 전체 화면 덮기 */}
-      {isExpanded && (
-        <div className="absolute right-0 top-0 h-full w-[90%] z-50 bg-card border-l border-border shadow-2xl transition-all duration-300 ease-in-out">
-          <GameChatInterface 
-            isExpanded={isExpanded} 
-            onToggleExpand={() => setIsExpanded(!isExpanded)} 
-          />
-        </div>
-      )}
-    </>
-  );
-}
 
 // 모달 컴포넌트를 동적 임포트 (SSR 비활성화)
 const ApiKeyModal = dynamic(() => import("@/components/ApiKeyModal"), {
@@ -69,10 +30,8 @@ const TeamSelectionModal = dynamic(() => import("@/components/TeamSelectionModal
 
 export default function Home() {
   const { currentTeamId, apiKey, gameMode, userPlayer, isLoading, currentDate, getCurrentSeasonEvent } = useGameStore();
-  const { currentView, isMobileMenuOpen, setIsMobileMenuOpen, setShowTournamentBriefing } = useUIStore();
-  const [isInfoDrawerOpen, setIsInfoDrawerOpen] = useState(false);
+  const { setShowTournamentBriefing } = useUIStore();
   const [isMounted, setIsMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<"chat" | "dashboard">("chat");
   const lastEventRef = useRef<string | null>(null);
 
   // 클라이언트에서만 마운트 상태 확인
@@ -113,27 +72,6 @@ export default function Home() {
   // 단계 5: 게임 화면 (API 키 있음 && gameMode 있음 && currentTeamId 있음)
   const showGame = isMounted && apiKey && gameMode !== null && currentTeamId;
 
-  // 현재 뷰에 따라 컴포넌트 렌더링
-  const renderView = () => {
-    switch (currentView) {
-      case "HOME":
-        return <DashboardView />;
-      case "TEAM":
-        return <TeamManagementView />;
-      case "MATCH":
-        return <MatchScheduleView />;
-      case "NEWS":
-        return <NewsArchiveView />;
-      case "STATS":
-        return <StatisticsView />;
-      case "FA":
-        return <FAMarketView />;
-      case "SETTINGS":
-        return <SettingsView />;
-      default:
-        return <DashboardView />;
-    }
-  };
 
   return (
     <>
@@ -165,86 +103,32 @@ export default function Home() {
             <SimulationPhaseIndicator />
           </div>
 
-          {/* 모바일 헤더 (햄버거 메뉴) */}
-          <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden"
-            >
-              <Menu className="w-5 h-5" />
-            </Button>
-            <h1 className="text-lg font-bold bg-gradient-to-r from-cyber-blue to-cyber-purple bg-clip-text text-transparent">
-              LCK Manager
-            </h1>
-            <div className="w-10" /> {/* 공간 맞춤용 */}
-          </div>
 
-          {/* PC 레이아웃: 좌측(대시보드) + 우측(채팅) */}
+          {/* PC 레이아웃: 채팅 중심 (중앙 정렬, max-width) */}
           <div className="hidden lg:flex flex-1 h-full overflow-hidden min-w-0 relative">
-            {/* 좌측 대시보드 - flex-1로 남은 공간 차지 */}
-            <div className="flex flex-col flex-1 h-full overflow-hidden min-w-0">
-              {/* 상단 상태 바 */}
-              <HeaderStatus />
-
-              {/* 대시보드 콘텐츠 - 스크롤 가능 (가로/세로 모두) */}
-              <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0">
-                {/* 최소 너비를 가진 내부 컨테이너 */}
-                <div className="min-w-[800px] w-full">
-                  {renderView()}
-                </div>
-              </div>
-
-            </div>
-
-            {/* 우측 채팅창 - 확장 가능 (absolute 포지셔닝을 위한 relative 부모) */}
-            <ChatSidebarContainer />
-          </div>
-
-          {/* 모바일 레이아웃: 탭 전환 방식 */}
-          <div className="lg:hidden flex flex-col flex-1 h-full overflow-hidden pt-14 pb-16">
-            {/* 채팅 탭 */}
-            {activeTab === "chat" && (
-              <div className="flex flex-col flex-1 h-full overflow-hidden">
-                <GameChatInterface />
-              </div>
-            )}
-
-            {/* 대시보드 탭 */}
-            {activeTab === "dashboard" && (
-              <div className="flex flex-col flex-1 h-full overflow-hidden">
+            {/* 중앙 정렬 컨테이너 */}
+            <div className="flex flex-col flex-1 h-full overflow-hidden items-center justify-center">
+              {/* 채팅창 - 최대 너비 제한 및 중앙 정렬 */}
+              <div className="flex flex-col w-full max-w-[1200px] h-full overflow-hidden">
                 {/* 상단 상태 바 */}
                 <HeaderStatus />
-
-                {/* 대시보드 콘텐츠 - 스크롤 가능 */}
-                <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0">
-                  <div className="min-w-[800px] w-full">
-                    {renderView()}
-                  </div>
+                
+                {/* 채팅 인터페이스 */}
+                <div className="flex-1 overflow-hidden">
+                  <GameChatInterface />
                 </div>
-
               </div>
-            )}
+            </div>
+          </div>
 
-            {/* 모바일 하단 탭 메뉴 */}
-            <div className="fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border px-4 py-2 flex items-center justify-around">
-              <Button
-                variant={activeTab === "chat" ? "default" : "ghost"}
-                onClick={() => setActiveTab("chat")}
-                className="flex-1 flex flex-col items-center gap-1 h-auto py-2"
-              >
-                <MessageSquare className="w-5 h-5" />
-                <span className="text-xs">채팅</span>
-              </Button>
-              <Button
-                variant={activeTab === "dashboard" ? "default" : "ghost"}
-                onClick={() => setActiveTab("dashboard")}
-                className="flex-1 flex flex-col items-center gap-1 h-auto py-2"
-              >
-                <LayoutDashboard className="w-5 h-5" />
-                <span className="text-xs">대시보드</span>
-              </Button>
+          {/* 모바일 레이아웃: 채팅 중심 */}
+          <div className="lg:hidden flex flex-col flex-1 h-full overflow-hidden pt-14">
+            {/* 상단 상태 바 */}
+            <HeaderStatus />
+            
+            {/* 채팅 인터페이스 - 전체 공간 사용 */}
+            <div className="flex-1 overflow-hidden">
+              <GameChatInterface />
             </div>
           </div>
         </div>

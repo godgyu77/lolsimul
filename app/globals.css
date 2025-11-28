@@ -12,23 +12,29 @@
 
 @layer base {
   :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 0 0% 100%; /* 흰색으로 변경 (가시성 향상) */
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 0 0% 100%; /* 흰색으로 변경 */
+    /* 다크 테마 강화 - 고대비 */
+    --background: 222.2 84% 3%;
+    --foreground: 0 0% 98%;
+    --card: 222.2 84% 5%;
+    --card-foreground: 0 0% 98%;
     --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 0 0% 100%; /* 흰색으로 변경 */
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 0 0% 100%; /* 흰색으로 변경 */
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 0 0% 100%; /* 흰색으로 변경 */
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 0 0% 90%; /* 밝은 회색으로 변경 (가시성 향상) */
-    --border: 217.2 32.6% 17.5%;
-    --input: 0 0% 15%; /* 어두운 배경 */
-    --input-foreground: 0 0% 100%; /* 흰색 텍스트 */
-    --ring: 212.7 26.8% 83.9%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217.2 32.6% 15%;
+    --secondary-foreground: 0 0% 98%;
+    --accent: 217.2 32.6% 20%;
+    --accent-foreground: 0 0% 98%;
+    --muted: 217.2 32.6% 12%;
+    --muted-foreground: 0 0% 85%;
+    --border: 217.2 32.6% 25%;
+    --input: 0 0% 12%;
+    --input-foreground: 0 0% 98%;
+    --ring: 217.2 91.2% 50%;
     --radius: 0.5rem;
+    
+    /* 사이버펑크 컬러 */
+    --cyber-blue: 217.2 91.2% 59.8%;
+    --cyber-purple: 280 70% 60%;
+    --cyber-green: 142 71% 45%;
   }
 }
 
@@ -83,59 +89,94 @@
   animation: cyber-glow 2s ease-in-out infinite;
 }
 
-/* Markdown 테이블 스타일 */
+/* Markdown 테이블 스타일 - 고대비 다크 테마 */
 .markdown-table {
   width: 100%;
   border-collapse: collapse;
   margin: 1rem 0;
-  background-color: hsl(var(--card));
-  color: hsl(var(--foreground));
-  min-width: 500px; /* 최소 너비 설정 (채팅창에 맞게 조정) */
+  background-color: hsl(222.2 84% 6%);
+  color: hsl(0 0% 100%);
+  min-width: 500px;
+  border: 2px solid hsl(217.2 32.6% 25%);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
 }
 
 .markdown-table thead {
-  background-color: hsl(var(--primary) / 0.2);
+  background: linear-gradient(135deg, hsl(217.2 91.2% 25% / 0.8), hsl(280 70% 25% / 0.8));
+  border-bottom: 2px solid hsl(217.2 91.2% 50%);
 }
 
 .markdown-table th {
-  border: 1px solid hsl(var(--border));
-  padding: 0.75rem 1rem;
+  border: 1px solid hsl(217.2 32.6% 30%);
+  padding: 0.875rem 1.125rem;
   text-align: center;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.875rem;
-  white-space: nowrap; /* 텍스트 줄바꿈 방지 */
+  white-space: nowrap;
+  color: hsl(0 0% 100%);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .markdown-table tbody tr {
-  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  border-bottom: 1px solid hsl(217.2 32.6% 20%);
+  transition: background-color 0.2s ease;
+}
+
+.markdown-table tbody tr:hover {
+  background-color: hsl(217.2 32.6% 15%);
 }
 
 .markdown-table tbody tr:last-child {
-  border-bottom: 2px solid hsl(var(--border));
+  border-bottom: 2px solid hsl(217.2 32.6% 30%);
 }
 
 .markdown-table tbody tr.team1 {
-  background-color: hsl(var(--card));
+  background-color: hsl(222.2 84% 6%);
 }
 
 .markdown-table tbody tr.team2 {
-  background-color: hsl(var(--muted) / 0.3);
+  background-color: hsl(217.2 32.6% 10%);
 }
 
 .markdown-table tbody tr.user-player-row {
-  background-color: hsl(280 70% 20% / 0.3); /* cyber-purple 배경 */
-  border-left: 3px solid hsl(280 70% 50%); /* 왼쪽 보더 강조 */
+  background: linear-gradient(90deg, hsl(280 70% 20% / 0.4), hsl(280 70% 15% / 0.3));
+  border-left: 4px solid hsl(280 70% 60%);
+  box-shadow: inset 0 0 10px hsl(280 70% 30% / 0.3);
 }
 
 .markdown-table tbody tr.user-player-row:hover {
-  background-color: hsl(280 70% 20% / 0.5);
+  background: linear-gradient(90deg, hsl(280 70% 25% / 0.5), hsl(280 70% 20% / 0.4));
+  box-shadow: inset 0 0 15px hsl(280 70% 40% / 0.4);
 }
 
 .markdown-table td {
-  border: 1px solid hsl(var(--border) / 0.5);
-  padding: 0.5rem 1rem;
+  border: 1px solid hsl(217.2 32.6% 20%);
+  padding: 0.625rem 1rem;
   text-align: center;
   font-size: 0.875rem;
-  white-space: nowrap; /* 텍스트 줄바꿈 방지 */
+  white-space: nowrap;
+  color: hsl(0 0% 95%);
+  font-weight: 500;
+}
+
+/* JSON 버튼 스타일 - 고대비 */
+button[data-option], 
+.button-option,
+[class*="option-button"] {
+  background: linear-gradient(135deg, hsl(217.2 91.2% 20%), hsl(280 70% 20%));
+  border: 2px solid hsl(217.2 91.2% 50%);
+  color: hsl(0 0% 100%);
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+button[data-option]:hover,
+.button-option:hover,
+[class*="option-button"]:hover {
+  background: linear-gradient(135deg, hsl(217.2 91.2% 30%), hsl(280 70% 30%));
+  border-color: hsl(217.2 91.2% 60%);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), 0 0 12px hsl(217.2 91.2% 40% / 0.3);
+  transform: translateY(-1px);
 }
 
