@@ -160,6 +160,7 @@ interface GameState {
   // 경제 시스템
   processMonthlyExpenses: () => void;
   checkSalaryCap: (teamId: string) => { isOver: boolean; current: number; cap: number };
+  updateTeamMoney: (teamId: string, newMoney: number) => void; // 자금 업데이트 전용 함수
 
   // 유틸리티
   getCurrentSeasonEvent: () => SeasonEvent;
@@ -194,7 +195,7 @@ function isAsianGamesYear(year: number): boolean {
 }
 
 // 시즌 이벤트 판단 함수
-function getSeasonEvent(date: Date): SeasonEvent {
+export function getSeasonEvent(date: Date): SeasonEvent {
   const month = date.getMonth() + 1; // 1~12
   const day = date.getDate();
   const year = date.getFullYear();
@@ -386,6 +387,23 @@ function calculateTeamSalary(team: Team): number {
   return team.roster.reduce((sum, player) => sum + player.salary, 0);
 }
 
+// 날짜 역행 방지 검증 함수 (중앙화된 guard)
+function validateDateUpdate(newDate: Date, currentDate: Date): Date {
+  // 날짜가 유효하지 않으면 현재 날짜 반환
+  if (!(newDate instanceof Date) || isNaN(newDate.getTime())) {
+    console.warn(`날짜 검증 실패: 유효하지 않은 날짜입니다. 현재 날짜를 유지합니다.`);
+    return currentDate;
+  }
+  
+  // 날짜 역행 방지: 새 날짜가 현재 날짜보다 이전이면 현재 날짜 반환
+  if (newDate < currentDate) {
+    console.warn(`날짜 역행 방지: 새 날짜(${newDate.toISOString()})가 현재 날짜(${currentDate.toISOString()})보다 이전입니다. 현재 날짜를 유지합니다.`);
+    return currentDate;
+  }
+  
+  return newDate;
+}
+
 // 선수 성장/노화 시스템 (프롬프트 규칙: 24세까지 성장, 25세부터 노화)
 function applyPlayerAging(player: Player): Player {
   const newAge = player.age + 1;
@@ -566,12 +584,14 @@ function parseAIResponse(response: string, state: GameState): { updates: Partial
     const parsedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     const currentDate = state.currentDate;
     
-    // 날짜 역행 방지: 파싱된 날짜가 현재 날짜보다 이전이면 무시
-    if (parsedDate >= currentDate) {
-      updates.currentDate = parsedDate;
+    // 날짜 역행 방지 검증 함수 사용
+    const validatedDate = validateDateUpdate(parsedDate, currentDate);
+    if (validatedDate.getTime() === parsedDate.getTime()) {
+      // 검증 통과: 날짜 업데이트
+      updates.currentDate = validatedDate;
     } else {
-      console.warn(`날짜 역행 방지: 파싱된 날짜(${parsedDate.toISOString()})가 현재 날짜(${currentDate.toISOString()})보다 이전입니다. 날짜 업데이트를 무시합니다.`);
-      // 날짜를 업데이트하지 않음 (현재 날짜 유지)
+      // 검증 실패: 날짜 업데이트하지 않음 (현재 날짜 유지)
+      // validateDateUpdate가 이미 경고를 출력했으므로 여기서는 추가 로그 없음
     }
   }
   
@@ -579,14 +599,13 @@ function parseAIResponse(response: string, state: GameState): { updates: Partial
   const moneyMatch = response.match(/자금:\s*([\d.]+)\s*억\s*원/);
   if (moneyMatch && state.currentTeamId) {
     const moneyInBillions = parseFloat(moneyMatch[1]);
-    const currentTeam = state.teams.find((t) => t.id === state.currentTeamId);
-    if (currentTeam) {
-      updates.teams = state.teams.map((team) =>
-        team.id === state.currentTeamId
-          ? { ...team, money: moneyInBillions * 100000000 }
-          : team
-      );
-    }
+    const moneyInWon = moneyInBillions * 100000000;
+    // updateTeamMoney 함수를 통해 업데이트하도록 변경 (하지만 parseAIResponse 내부에서는 직접 업데이트)
+    updates.teams = state.teams.map((team) =>
+      team.id === state.currentTeamId
+        ? { ...team, money: moneyInWon }
+        : team
+    );
   }
   
   // [NEWS] 파싱: 뉴스 추가
@@ -1232,6 +1251,17 @@ export const useGameStore = create<GameState>((set, get) => ({
       return;
     }
 
+    // "일정 진행" 관련 명령어 감지
+    const isScheduleProgressCommand = 
+      command.includes("일정 진행") || 
+      command.includes("하루 진행") || 
+      command.includes("다음 주로") ||
+      command.includes("다음주로") ||
+      command.includes("스토브리그 일정 진행");
+    
+    // 일정 진행 명령어인 경우, 이벤트 체크는 AI가 처리하도록 함
+    // (로스터/스태프 필수 체크는 시스템 프롬프트에서 처리)
+
     // 로딩 상태 시작
     set({ isLoading: true });
     
@@ -1340,6 +1370,14 @@ export const useGameStore = create<GameState>((set, get) => ({
 
       // 응답 파싱하여 상태 업데이트 및 필터링
       const { updates, options, filteredContent } = parseAIResponse(aiResponse, get());
+      
+      // "일정 진행" 명령어인데 날짜가 업데이트되지 않았다면 강제로 현재 날짜 유지
+      // (이미 위에서 advanceDay를 호출했으므로)
+      if (isScheduleProgressCommand && !updates.currentDate) {
+        const currentState = get();
+        // 검증: 현재 날짜가 이전 날짜보다 작지 않도록 보장
+        updates.currentDate = validateDateUpdate(currentState.currentDate, state.currentDate);
+      }
       
       // 필터링된 내용으로 메시지 추가
       const aiMessage: ChatMessage = {
@@ -1485,11 +1523,13 @@ export const useGameStore = create<GameState>((set, get) => ({
           // 날짜 업데이트가 있으면 보호 로직 적용
           if (updateDate) {
             set((s) => {
-              // 날짜 역행 방지: 업데이트 날짜가 현재 날짜보다 이전이면 무시
-              if (updateDate >= s.currentDate) {
-                return { ...otherUpdates, currentDate: updateDate };
+              // 날짜 역행 방지 검증 함수 사용
+              const validatedDate = validateDateUpdate(updateDate, s.currentDate);
+              if (validatedDate.getTime() === updateDate.getTime()) {
+                // 검증 통과: 날짜 업데이트
+                return { ...otherUpdates, currentDate: validatedDate };
               } else {
-                console.warn(`날짜 역행 방지: 업데이트 날짜(${updateDate.toISOString()})가 현재 날짜(${s.currentDate.toISOString()})보다 이전입니다. 날짜를 유지합니다.`);
+                // 검증 실패: 날짜 유지
                 return otherUpdates;
               }
             });
@@ -1502,11 +1542,13 @@ export const useGameStore = create<GameState>((set, get) => ({
           
           if (updateDate) {
             set((s) => {
-              // 날짜 역행 방지
-              if (updateDate >= s.currentDate) {
-                return { ...otherUpdates, currentDate: updateDate };
+              // 날짜 역행 방지 검증 함수 사용
+              const validatedDate = validateDateUpdate(updateDate, s.currentDate);
+              if (validatedDate.getTime() === updateDate.getTime()) {
+                // 검증 통과: 날짜 업데이트
+                return { ...otherUpdates, currentDate: validatedDate };
               } else {
-                console.warn(`날짜 역행 방지: 업데이트 날짜(${updateDate.toISOString()})가 현재 날짜(${s.currentDate.toISOString()})보다 이전입니다. 날짜를 유지합니다.`);
+                // 검증 실패: 날짜 유지
                 return otherUpdates;
               }
             });
@@ -1515,11 +1557,12 @@ export const useGameStore = create<GameState>((set, get) => ({
           }
         }
         
-        // 최종 날짜 검증: 업데이트 후에도 날짜가 역행하지 않았는지 확인
+        // 최종 날짜 검증: 업데이트 후에도 날짜가 역행하지 않았는지 확인 (이중 보호)
         set((s) => {
-          if (s.currentDate < currentDateBeforeUpdate) {
+          const validatedDate = validateDateUpdate(s.currentDate, currentDateBeforeUpdate);
+          if (validatedDate.getTime() !== s.currentDate.getTime()) {
             console.error(`치명적 오류: 날짜가 역행했습니다. ${currentDateBeforeUpdate.toISOString()} -> ${s.currentDate.toISOString()}. 날짜를 복구합니다.`);
-            return { currentDate: currentDateBeforeUpdate };
+            return { currentDate: validatedDate };
           }
           return {};
         });
@@ -1554,7 +1597,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => {
       const newDate = new Date(state.currentDate);
       newDate.setDate(newDate.getDate() + 1);
-      const newState = { ...state, currentDate: newDate };
+      
+      // 날짜 역행 방지 검증 (혹시 모를 역행 방지)
+      const validatedDate = validateDateUpdate(newDate, state.currentDate);
+      const newState = { ...state, currentDate: validatedDate };
 
       // 연도 변경 체크 (1월 1일) - 선수 노화 적용
       const oldYear = state.currentDate.getFullYear();
@@ -1571,10 +1617,11 @@ export const useGameStore = create<GameState>((set, get) => ({
           const monthlySalary = (calculateTeamSalary(team) * 100000000) / 12; // 억원 -> 원, 월별
           const operatingCost = 50000000; // 운영비 5천만원
           const totalExpense = monthlySalary + operatingCost;
+          const newMoney = Math.max(0, team.money - totalExpense);
 
           return {
             ...team,
-            money: Math.max(0, team.money - totalExpense),
+            money: newMoney,
           };
         });
 
@@ -2014,10 +2061,11 @@ export const useGameStore = create<GameState>((set, get) => ({
         const monthlySalary = (calculateTeamSalary(team) * 100000000) / 12;
         const operatingCost = 50000000;
         const totalExpense = monthlySalary + operatingCost;
+        const newMoney = Math.max(0, team.money - totalExpense);
 
         return {
           ...team,
-          money: Math.max(0, team.money - totalExpense),
+          money: newMoney,
         };
       });
 
@@ -2038,6 +2086,17 @@ export const useGameStore = create<GameState>((set, get) => ({
       current: currentSalary,
       cap: salaryCap,
     };
+  },
+
+  // 자금 업데이트 전용 함수 (단일 source of truth)
+  updateTeamMoney: (teamId: string, newMoney: number) => {
+    set((state) => ({
+      teams: state.teams.map((team) =>
+        team.id === teamId
+          ? { ...team, money: Math.max(0, newMoney) } // 음수 방지
+          : team
+      ),
+    }));
   },
 
   // 유틸리티
@@ -2466,6 +2525,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       content: `게임이 저장되었습니다. (${new Date().toLocaleString("ko-KR")})`,
       timestamp: new Date(),
     });
+    
+    return true;
   },
 
   loadGame: (gameMode: "MANAGER" | "PLAYER") => {
@@ -2481,8 +2542,12 @@ export const useGameStore = create<GameState>((set, get) => ({
       const data = JSON.parse(savedData);
       
       // Date 객체 복원
-      const currentDate = new Date(data.currentDate);
+      const loadedDate = new Date(data.currentDate);
       const savedAt = data.savedAt ? new Date(data.savedAt) : new Date();
+      
+      // 날짜 역행 방지: 저장된 날짜가 현재 날짜보다 이전이면 현재 날짜 사용
+      const currentState = get();
+      const currentDate = validateDateUpdate(loadedDate, currentState.currentDate);
       
       // 메시지의 timestamp 복원
       const messages = data.messages?.map((msg: ChatMessage) => ({
@@ -2517,7 +2582,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         date: new Date(item.date),
       })) || [];
       
-      // 상태 복원
+      // 상태 복원 (날짜 검증 포함)
+      // currentDate는 이미 위에서 검증되었으므로 그대로 사용
       set({
         currentDate,
         currentTeamId: data.currentTeamId || "",

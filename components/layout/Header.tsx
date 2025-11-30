@@ -4,8 +4,9 @@ import { useGameStore } from "@/store/gameStore";
 import { Calendar, DollarSign, Trophy } from "lucide-react";
 
 export default function Header() {
-  const { currentDate, currentTeamId, getTeamById, getCurrentSeasonEvent } = useGameStore();
-  const currentTeam = getTeamById(currentTeamId);
+  const { currentDate, currentTeamId, teams, getCurrentSeasonEvent } = useGameStore();
+  // teams 배열을 직접 구독하여 자금 변경 시 자동 리렌더링
+  const currentTeam = teams.find((t) => t.id === currentTeamId);
   const seasonEvent = getCurrentSeasonEvent();
 
   const seasonEventNames: Record<ReturnType<typeof getCurrentSeasonEvent>, string> = {

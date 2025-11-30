@@ -1,29 +1,27 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Send, MessageSquare, X, ClipboardList, Maximize2, Minimize2, Command, ArrowRight, Menu } from "lucide-react";
+import { MessageSquare, X, ClipboardList, Maximize2, Minimize2 } from "lucide-react";
 import { useGameStore, ChatMessage } from "@/store/gameStore";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { TRAIT_LIBRARY } from "@/constants/systemPrompt";
-import GameMenuModal from "@/components/GameMenuModal";
 
 interface GameChatInterfaceProps {
   isExpanded?: boolean;
   onToggleExpand?: () => void;
+  hideHeader?: boolean; // 헤더 숨김 옵션
+  hideInput?: boolean; // 입력창 숨김 옵션 (하단만 표시용)
+  hideMessages?: boolean; // 메시지 영역 숨김 옵션 (입력창만 표시용)
 }
 
-export default function GameChatInterface({ isExpanded = false, onToggleExpand }: GameChatInterfaceProps) {
-  const { apiKey, messages, sendCommand, news, currentOptions, setCurrentOptions, userPlayer, gameMode, availableActions } = useGameStore();
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+export default function GameChatInterface({ isExpanded = false, onToggleExpand, hideHeader = false, hideInput = false, hideMessages = false }: GameChatInterfaceProps) {
+  const { messages, news, currentOptions, setCurrentOptions, gameMode, userPlayer } = useGameStore();
+  const [isLoading] = useState(false);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
-  const [showActionModal, setShowActionModal] = useState(false);
   const [internalExpanded, setInternalExpanded] = useState(false);
-  const [showMenuModal, setShowMenuModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   
   // 외부에서 제어하는 경우와 내부에서 제어하는 경우 모두 지원
   const expanded = isExpanded !== undefined ? isExpanded : internalExpanded;
@@ -34,23 +32,28 @@ export default function GameChatInterface({ isExpanded = false, onToggleExpand }
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // 뉴스가 추가되면 채팅에 표시
+  // 뉴스가 추가되면 채팅에 표시 (무한 루프 방지: news만 의존성으로 사용)
   useEffect(() => {
     if (news.length > 0) {
       const latestNews = news[0];
-      const newsMessage: ChatMessage = {
-        id: `news-${latestNews.id}`,
-        type: "news",
-        content: `[NEWS] ${latestNews.title}\n${latestNews.content}`,
-        timestamp: latestNews.date,
-      };
-      // 중복 방지 체크
-      const exists = messages.some((m) => m.id === newsMessage.id);
+      const newsMessageId = `news-${latestNews.id}`;
+      
+      // 중복 방지: 현재 메시지 목록에서 확인
+      const currentMessages = useGameStore.getState().messages;
+      const exists = currentMessages.some((m) => m.id === newsMessageId);
+      
       if (!exists) {
+        const newsMessage: ChatMessage = {
+          id: newsMessageId,
+          type: "news",
+          content: `[NEWS] ${latestNews.title}\n${latestNews.content}`,
+          timestamp: latestNews.date,
+        };
         useGameStore.getState().addMessage(newsMessage);
       }
     }
-  }, [news, messages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [news]); // messages를 의존성에서 제거하여 무한 루프 방지
 
   // currentOptions가 변경될 때 모달 자동 표시 방지
   useEffect(() => {
@@ -61,39 +64,16 @@ export default function GameChatInterface({ isExpanded = false, onToggleExpand }
     }
   }, [currentOptions]);
 
-  const handleSend = async (command?: string) => {
-    const commandToSend = command || input.trim();
-    if (!commandToSend || isLoading || !apiKey) return;
-
-    setInput("");
-    setIsLoading(true);
-    setCurrentOptions([]); // 선택지 초기화
-    setShowOptionsModal(false); // 모달도 닫기
-
-    try {
-      await sendCommand(commandToSend);
-    } catch (error) {
-      console.error("명령 실행 오류:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleOptionClick = (value: string) => {
+  const handleOptionClick = useCallback((value: string) => {
     setShowOptionsModal(false); // 모달 닫기
-    handleSend(value); // 선택지 선택 시 선택지 초기화됨
-  };
+    // 선택지 클릭은 GameInputFooter에서 처리
+    const { sendCommand } = useGameStore.getState();
+    sendCommand(value);
+  }, []);
 
-  const handleCloseModal = () => {
+  const handleCloseModal = useCallback(() => {
     setShowOptionsModal(false); // 모달만 닫고 버튼은 유지
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+  }, []);
 
   const getMessageStyle = (type: ChatMessage["type"]) => {
     switch (type) {
@@ -110,8 +90,8 @@ export default function GameChatInterface({ isExpanded = false, onToggleExpand }
     }
   };
 
-  // 특성 키를 한글명으로 변환
-  const convertTraitToKorean = (traitKey: string): string => {
+  // 특성 키를 한글명으로 변환 (useCallback으로 메모이제이션)
+  const convertTraitToKorean = useCallback((traitKey: string): string => {
     if (!traitKey || traitKey === '-' || traitKey.trim() === '') return '-';
     
     // **로 감싸진 경우 제거
@@ -132,20 +112,20 @@ export default function GameChatInterface({ isExpanded = false, onToggleExpand }
       return t;
     });
     return koreanTraits.join(', ');
-  };
+  }, []);
 
-  // 플레이어인지 확인 (닉네임으로 판단)
-  const isUserPlayer = (nickname: string): boolean => {
+  // 플레이어인지 확인 (닉네임으로 판단) (useCallback으로 메모이제이션)
+  const isUserPlayer = useCallback((nickname: string): boolean => {
     if (gameMode !== "PLAYER" || !userPlayer) return false;
     if (!nickname) return false;
     
     // **로 감싸진 경우와 일반 텍스트 모두 확인
     const cleanNickname = nickname.replace(/\*\*/g, '').trim();
     return cleanNickname === userPlayer.nickname;
-  };
+  }, [gameMode, userPlayer]);
 
-  // Markdown 테이블을 HTML로 변환
-  const renderMarkdownTable = (content: string): string => {
+  // Markdown 테이블을 HTML로 변환 (useCallback으로 메모이제이션)
+  const renderMarkdownTable = useCallback((content: string): string => {
     // 테이블 패턴 찾기: | 컬럼1 | 컬럼2 | ... 형식
     const tableRegex = /(\|[^\n]+\|\n\|[:\-| ]+\|\n(?:\|[^\n]+\|\n?)+)/g;
     let processedContent = content;
@@ -231,67 +211,173 @@ export default function GameChatInterface({ isExpanded = false, onToggleExpand }
     });
 
     return processedContent;
-  };
+  }, [convertTraitToKorean, isUserPlayer]);
 
-  // 메시지 내용 렌더링 (테이블 변환 포함)
-  const renderMessageContent = (content: string) => {
+  // 메시지 내용 렌더링 (테이블 변환 및 스타일링 포함) (useMemo로 메모이제이션)
+  const renderMessageContent = useCallback((content: string): React.ReactElement => {
     // 먼저 테이블 변환
     let processedContent = renderMarkdownTable(content);
-    // 나머지 줄바꿈 처리
+    
+    // 1. 구분선(---)을 시각적 구분선으로 변환 (줄바꿈 처리 전에)
+    processedContent = processedContent.replace(
+      /^---+\s*$/gm,
+      '<hr class="content-divider" />'
+    );
+    
+    // 2. [STATUS] 정보를 독립적인 블록으로 변환 (여러 줄 지원)
+    processedContent = processedContent.replace(
+      /\[STATUS\]\s*([^\n<]+(?:\n(?!\[|$|---|<hr)[^\n<]+)*)/g,
+      (match, statusContent) => {
+        const cleanContent = statusContent.trim().replace(/\n/g, '<br />');
+        return `<div class="status-block"><div class="status-label">[STATUS]</div><div class="status-content">${cleanContent}</div></div>`;
+      }
+    );
+    
+    // 3. [알림] 정보를 아이콘과 배경색으로 강조 (여러 줄 지원)
+    processedContent = processedContent.replace(
+      /\[알림\]\s*([^\n<]+(?:\n(?!\[|$|---|<hr)[^\n<]+)*)/g,
+      (match, notificationContent) => {
+        const cleanContent = notificationContent.trim().replace(/\n/g, '<br />');
+        return `<div class="notification-block"><span class="notification-icon">🔔</span><span class="notification-content">${cleanContent}</span></div>`;
+      }
+    );
+    
+    // 4. 제목 스타일링 (**[제목]** 형식) - 제목 패턴을 먼저 처리
+    processedContent = processedContent.replace(
+      /\*\*\[([^\]]+)\]\*\*/g,
+      '<h3 class="report-section-title">[$1]</h3>'
+    );
+    
+    // 5. 일반 굵은 글씨 강조 (제목이 아닌 경우, **로 감싸진 텍스트)
+    processedContent = processedContent.replace(
+      /\*\*([^*\n<]+)\*\*/g,
+      '<strong class="text-emphasis">$1</strong>'
+    );
+    
+    // 6. 마크다운 헤더 제거 (###, ##, # 처리)
+    processedContent = processedContent.replace(
+      /^#{1,6}\s+(.+)$/gm,
+      '<strong class="text-emphasis">$1</strong>'
+    );
+    
+    // 7. 남아있는 마크다운 문법 제거 (처리되지 않은 **, ### 등)
+    processedContent = processedContent.replace(/\*\*/g, '');
+    processedContent = processedContent.replace(/^#{1,6}\s*/gm, '');
+    
+    // 8. 줄바꿈 처리 (이미 처리된 부분 제외)
     processedContent = processedContent.replace(/\n/g, '<br />');
+    
     return <div dangerouslySetInnerHTML={{ __html: processedContent }} />;
-  };
+  }, [renderMarkdownTable]);
 
   return (
-    <div className="flex flex-col h-full w-full bg-card overflow-hidden">
-      {/* 헤더 */}
-      <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-border flex-shrink-0">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-cyber-blue" />
-            <h2 className="text-base sm:text-lg font-bold">게임 진행</h2>
+    <div className="flex flex-col h-full w-full bg-background overflow-hidden">
+      {/* 헤더 (hideHeader가 false일 때만 표시) */}
+      {!hideHeader && (
+        <div className="px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 border-b border-border flex-shrink-0 bg-card">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-cyber-blue flex-shrink-0" />
+              <h2 className="text-sm sm:text-base md:text-lg font-bold truncate">게임 진행</h2>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleExpand}
+              className="h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0"
+              title={expanded ? "축소" : "확장"}
+            >
+              {expanded ? (
+                <Minimize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              ) : (
+                <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              )}
+            </Button>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleExpand}
-            className="h-8 w-8"
-            title={expanded ? "축소" : "확장"}
-          >
-            {expanded ? (
-              <Minimize2 className="w-4 h-4" />
-            ) : (
-              <Maximize2 className="w-4 h-4" />
-            )}
-          </Button>
         </div>
-      </div>
+      )}
 
-      {/* 메시지 영역 */}
-      <div className="flex-1 overflow-y-auto overflow-x-auto p-3 sm:p-4 space-y-3 min-h-0">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`p-2 sm:p-3 rounded-lg ${getMessageStyle(message.type)} max-w-[90%] ${
-              message.type === "user" ? "text-right" : "text-left"
-            }`}
-          >
-            {message.type === "news" && (
-              <div className="text-xs font-semibold mb-1 opacity-90 text-cyber-purple-300">📰 뉴스</div>
-            )}
-            <div className="whitespace-pre-wrap break-words text-foreground">
-              {renderMessageContent(message.content)}
-            </div>
-            <div className="text-xs opacity-60 mt-1 text-muted-foreground">
-              {message.timestamp.toLocaleTimeString("ko-KR", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+      {/* 메시지 영역 - 중앙 정렬 및 폭 제한 */}
+      {!hideMessages && (
+        <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0 scroll-smooth">
+          <div className="flex items-center justify-center min-h-full">
+            <div className="w-full max-w-[1200px] px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 space-y-2 sm:space-y-3 relative">
+            {messages.map((message) => {
+              const messageStyle = getMessageStyle(message.type);
+              const isUser = message.type === "user";
+              
+              // 리포트 형식 감지: AI 메시지(message.type === "game" 또는 "system")는 모두 리포트 형식으로 표시
+              // 사용자 메시지는 일반 말풍선으로 표시
+              const isReport = !isUser && (message.type === "game" || 
+                message.type === "system" ||
+                message.content.includes("[STATUS]") || 
+                message.content.includes("REPORT") ||
+                message.content.includes("리포트") ||
+                message.content.includes("GM OFFICE") ||
+                message.content.includes("재정") ||
+                message.content.includes("순위표") ||
+                message.content.includes("선수단 명단") ||
+                message.content.includes("시범경기") ||
+                message.content.includes("정규시즌") ||
+                message.content.includes("시즌") ||
+                message.content.includes("경기 결과") ||
+                message.content.includes("환영합니다") ||
+                message.content.includes("게임을 시작") ||
+                message.content.includes("명령어를 입력"));
+              
+              return (
+                <div
+                  key={message.id}
+                  className={`message-enter ${
+                    isReport 
+                      ? "w-full p-4 sm:p-5 md:p-6 bg-card border border-border rounded-lg shadow-sm my-2 transition-all duration-300 hover:shadow-md" 
+                      : `p-2 sm:p-2.5 md:p-3 rounded-lg ${messageStyle} transition-all duration-200 ${
+                          isUser ? "text-right" : "text-left"
+                        }`
+                  }`}
+                  style={!isReport && isUser ? { 
+                    maxWidth: "fit-content", 
+                    width: "auto", 
+                    display: "block",
+                    marginLeft: "auto",
+                    marginRight: "0"
+                  } : !isReport ? { 
+                    maxWidth: "fit-content", 
+                    width: "auto", 
+                    display: "inline-block" 
+                  } : {}}
+                >
+                  {message.type === "news" && (
+                    <div className="text-xs font-semibold mb-1 opacity-90 text-cyber-purple-300">📰 뉴스</div>
+                  )}
+                  {isReport && (
+                    <div className="mb-4 pb-3 border-b-2 border-primary/30">
+                      <div className="text-sm sm:text-base font-bold text-primary uppercase tracking-wider mb-1">
+                        GM OFFICE REPORT
+                      </div>
+                    </div>
+                  )}
+                  <div className={`whitespace-pre-wrap break-words text-foreground ${
+                    isReport ? "text-sm sm:text-base leading-relaxed space-y-2" : "text-xs sm:text-sm"
+                  }`}>
+                    {renderMessageContent(message.content)}
+                  </div>
+                  <div className={`text-[10px] sm:text-xs opacity-60 mt-1 text-muted-foreground ${
+                    isReport ? "text-right" : ""
+                  }`}>
+                    {message.timestamp.toLocaleTimeString("ko-KR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={messagesEndRef} />
             </div>
           </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
+        </div>
+      )}
 
       {/* 선택지 모달 (PC/모바일 공통) */}
       {currentOptions.length > 0 && showOptionsModal && (
@@ -331,161 +417,6 @@ export default function GameChatInterface({ isExpanded = false, onToggleExpand }
         </div>
       )}
 
-      {/* 입력 영역 */}
-      <div className="p-3 sm:p-4 border-t border-border flex-shrink-0 relative bg-card/95 backdrop-blur-sm">
-        <div className="flex gap-2 items-end">
-          {/* 작전지시 버튼 (availableActions가 있을 때만 표시) */}
-          {availableActions.length > 0 && (
-            <Button
-              onClick={() => setShowActionModal(true)}
-              variant="outline"
-              size="icon"
-              className="shrink-0 h-11 w-11 sm:h-10 sm:w-10 mb-0 touch-manipulation border-cyber-blue/50 hover:bg-cyber-blue/20 hover:border-cyber-blue"
-              title="작전지시"
-            >
-              <Command className="w-5 h-5 sm:w-4 sm:h-4 text-cyber-blue" />
-            </Button>
-          )}
-          
-          {/* 게임 정보 버튼 (작전지시 버튼 옆에 배치) */}
-          <Button
-            onClick={() => setShowMenuModal(true)}
-            variant="outline"
-            size="icon"
-            className="shrink-0 h-11 w-11 sm:h-10 sm:w-10 mb-0 touch-manipulation border-cyber-purple/50 hover:bg-cyber-purple/20 hover:border-cyber-purple"
-            title="게임 정보"
-          >
-            <Menu className="w-5 h-5 sm:w-4 sm:h-4 text-cyber-purple" />
-          </Button>
-          
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="명령어 입력..."
-            className="flex-1 px-3 sm:px-4 py-3 sm:py-2.5 bg-background border-2 border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-cyber-blue/50 focus:border-cyber-blue text-base sm:text-sm font-medium text-foreground placeholder:text-muted-foreground/60 touch-manipulation"
-            disabled={isLoading || !apiKey}
-          />
-          <Button
-            onClick={() => handleSend()}
-            disabled={!input.trim() || isLoading || !apiKey}
-            size="icon"
-            className="shrink-0 h-11 w-11 sm:h-10 sm:w-10 bg-gradient-to-r from-cyber-blue to-cyber-purple hover:from-cyber-blue/90 hover:to-cyber-purple/90 border-0 shadow-lg shadow-cyber-blue/20 touch-manipulation"
-          >
-            <Send className="w-5 h-5 sm:w-4 sm:h-4" />
-          </Button>
-        </div>
-        
-        {/* 작전지시 모달 */}
-        {availableActions.length > 0 && showActionModal && (
-          <>
-            {/* 배경 오버레이 (외부 클릭 시 닫기) */}
-            <div 
-              className="fixed inset-0 z-[45] bg-black/50 lg:z-40"
-              onClick={() => setShowActionModal(false)}
-            />
-            {/* PC: 좌측 하단, 모바일: 화면 하단 중앙 (하단 탭 메뉴 위에 표시) */}
-            <div className={cn(
-              "fixed z-[50]",
-              // PC: 좌측 하단 (입력창 기준)
-              "lg:absolute lg:bottom-full lg:left-0 lg:mb-2 lg:w-[320px] lg:z-50",
-              // 모바일: 화면 하단 중앙 (하단 탭 메뉴 z-40 위에 표시)
-              "bottom-0 left-0 right-0 lg:right-auto lg:max-w-[calc(100vw-2rem)]",
-              "max-h-[70vh] overflow-y-auto",
-              // 모바일에서 하단 탭 메뉴 높이만큼 여백 추가
-              "pb-16 lg:pb-0"
-            )}>
-              <Card className="bg-card border-border shadow-2xl rounded-t-2xl lg:rounded-lg">
-                <CardContent className="p-4 sm:p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-cyber-blue to-cyber-purple bg-clip-text text-transparent">
-                      작전지시
-                    </h3>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setShowActionModal(false)}
-                      className="h-8 w-8 sm:h-9 sm:w-9"
-                    >
-                      <X className="w-5 h-5" />
-                    </Button>
-                  </div>
-                  <div className="space-y-2 sm:space-y-3">
-                    {/* 일정 진행 버튼을 맨 위에 고정 */}
-                    {(() => {
-                      // 일정 진행 관련 액션 찾기
-                      const proceedAction = availableActions.find((action) =>
-                        action.label.includes("일정 진행") || 
-                        action.label.includes("하루 진행") ||
-                        action.command.includes("일정 진행") ||
-                        action.command.includes("하루 진행")
-                      );
-                      
-                      // 나머지 액션들
-                      const otherActions = availableActions.filter((action) => action !== proceedAction);
-                      
-                      return (
-                        <>
-                          {/* 일정 진행 버튼 (강조 스타일) */}
-                          {proceedAction && (
-                            <Button
-                              key={proceedAction.id}
-                              onClick={async () => {
-                                setShowActionModal(false);
-                                await sendCommand(proceedAction.command);
-                              }}
-                              className="w-full justify-start gap-2 sm:gap-3 h-auto py-3 sm:py-3.5 px-4 text-sm sm:text-base bg-orange-500/20 hover:bg-orange-500/30 border-2 border-orange-500/50 hover:border-orange-500 text-orange-300 font-semibold active:bg-orange-500/40 transition-colors touch-manipulation shadow-lg shadow-orange-500/20"
-                              disabled={isLoading}
-                            >
-                              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                              <span className="flex-1 text-left">{proceedAction.label}</span>
-                            </Button>
-                          )}
-                          
-                          {/* 구분선 (일정 진행 버튼이 있을 때만) */}
-                          {proceedAction && otherActions.length > 0 && (
-                            <div className="border-t border-border/50 my-2" />
-                          )}
-                          
-                          {/* 나머지 액션 버튼들 */}
-                          {otherActions.map((action) => (
-                            <Button
-                              key={action.id}
-                              onClick={async () => {
-                                setShowActionModal(false);
-                                await sendCommand(action.command);
-                              }}
-                              variant="outline"
-                              className="w-full justify-start gap-2 sm:gap-3 h-auto py-3 sm:py-3.5 px-4 text-sm sm:text-base hover:bg-primary/20 hover:border-primary/50 active:bg-primary/30 transition-colors touch-manipulation"
-                              disabled={isLoading}
-                            >
-                              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                              <span className="flex-1 text-left">{action.label}</span>
-                            </Button>
-                          ))}
-                        </>
-                      );
-                    })()}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </>
-        )}
-        {!apiKey && (
-          <p className="text-xs text-muted-foreground mt-2">
-            API 키가 필요합니다.
-          </p>
-        )}
-      </div>
-
-      {/* 통합 메뉴 모달 */}
-      <GameMenuModal
-        isOpen={showMenuModal}
-        onClose={() => setShowMenuModal(false)}
-      />
     </div>
   );
 }

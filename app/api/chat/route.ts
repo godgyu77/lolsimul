@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { LOL_SYSTEM_PROMPT, TRAIT_LIBRARY, ROSTER_DB } from "@/constants/systemPrompt";
+import { getSeasonEvent } from "@/store/gameStore";
 
 // 재시도 가능한 HTTP 상태 코드
 const RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504];
@@ -73,6 +74,11 @@ export async function POST(request: NextRequest) {
     );
     const currentDate = new Date(gameState.currentDate);
     
+    // 현재 팀의 로스터 및 스태프 정보
+    const team1Roster = currentTeam?.roster.filter((p: any) => p.division === "1군") || [];
+    const hasHeadCoach = gameState.rosters?.staff?.some((s: any) => s.role === "headCoach") || false;
+    const currentSeasonEvent = getSeasonEvent(currentDate);
+    
     // 게임 모드 및 선수 정보 추가
     let gameStateText = `
 현재 게임 상태:
@@ -80,7 +86,9 @@ export async function POST(request: NextRequest) {
 - 게임 모드: ${gameState.gameMode === "PLAYER" ? "선수 커리어 모드" : gameState.gameMode === "MANAGER" ? "감독 모드" : "미선택"}
 - 선택된 팀: ${currentTeam?.name || "없음"}
 - 팀 자금: ${currentTeam ? (currentTeam.money / 100000000).toFixed(1) : 0}억원
-- 로스터: ${currentTeam?.roster.length || 0}명
+- 1군 로스터: ${team1Roster.length}명 (필수: 5명 이상)
+- 코칭스태프: ${gameState.rosters?.staff?.length || 0}명 (감독 필수: ${hasHeadCoach ? "있음" : "없음"})
+- 현재 시즌 이벤트: ${currentSeasonEvent}
 `;
 
     // 선수 커리어 모드이고 userPlayer가 이미 생성된 경우

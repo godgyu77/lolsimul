@@ -68,8 +68,8 @@ const menuItems: Array<{
   },
 ];
 
-// 메뉴 항목별 명령어 매핑
-const menuCommands: Record<MenuViewType, string> = {
+// 메뉴 항목별 명령어 매핑 (null 제외)
+const menuCommands: Record<Exclude<MenuViewType, null>, string> = {
   HOME: "대시보드 보여줘",
   TEAM: "팀 관리 보여줘",
   MATCH: "경기 일정 보여줘",
@@ -77,7 +77,6 @@ const menuCommands: Record<MenuViewType, string> = {
   STATS: "리그 통계 보여줘",
   FA: "FA 명단 보여줘",
   SETTINGS: "", // 설정은 별도 처리
-  null: "",
 };
 
 export default function GameMenuModal({
@@ -89,6 +88,9 @@ export default function GameMenuModal({
   if (!isOpen) return null;
 
   const handleMenuClick = async (view: MenuViewType) => {
+    // null 체크
+    if (!view) return;
+    
     // 명령어 가져오기
     const command = menuCommands[view];
     if (command) {
@@ -135,8 +137,19 @@ export default function GameMenuModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-card border border-border rounded-lg w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden">
+    <div 
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity duration-200"
+      onClick={(e) => {
+        // 배경 클릭 시 모달 닫기
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div 
+        className="bg-card border border-border rounded-lg w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden modal-enter transition-all duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* 헤더 */}
         <div className="flex items-center justify-between p-6 border-b border-border">
           <div>

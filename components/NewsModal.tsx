@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { X, Newspaper } from "lucide-react";
 import { useGameStore } from "@/store/gameStore";
@@ -28,7 +28,24 @@ const newsTypeColors: Record<NewsItem["type"], string> = {
 };
 
 export default function NewsModal({ isOpen, onClose }: NewsModalProps) {
-  const { newsHistory, currentDate, getTeamById } = useGameStore();
+  const { newsHistory, currentDate, getTeamById, messages } = useGameStore();
+
+  // AI가 생성한 뉴스 리포트 메시지 찾기 (최신순)
+  const newsReportMessages = useMemo(() => {
+    return messages
+      .filter((msg) => {
+        // 뉴스 리포트 형식 메시지 찾기 (LoL Esports 뉴스 속보 포함)
+        return (
+          msg.type === "game" &&
+          (msg.content.includes("[LoL Esports 뉴스 속보]") ||
+           msg.content.includes("LoL Esports 뉴스 속보") ||
+           msg.content.includes("뉴스 속보") ||
+           (msg.content.includes("뉴스") && (msg.content.includes("FA 시장") || msg.content.includes("LPL"))))
+        );
+      })
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+      .slice(0, 5); // 최신 5개만
+  }, [messages]);
 
   // currentDate 기준으로 뉴스 필터링 (현재 날짜 이전의 뉴스만 표시)
   const filteredNews = useMemo(() => {
@@ -57,7 +74,9 @@ export default function NewsModal({ isOpen, onClose }: NewsModalProps) {
     return `${year}/${month}/${day}`;
   };
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return null;
+  }
 
   return (
     <div 
@@ -101,7 +120,50 @@ export default function NewsModal({ isOpen, onClose }: NewsModalProps) {
 
         {/* 뉴스 목록 */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 sm:space-y-4">
-          {filteredNews.length === 0 ? (
+          {/* AI가 생성한 뉴스 리포트 표시 */}
+          {newsReportMessages.length > 0 && (
+            <div className="mb-6 space-y-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Newspaper className="w-5 h-5 text-cyber-purple" />
+                <h3 className="text-lg font-bold bg-gradient-to-r from-cyber-blue to-cyber-purple bg-clip-text text-transparent">
+                  최근 뉴스 리포트
+                </h3>
+              </div>
+              {newsReportMessages.map((msg) => (
+                <Card
+                  key={msg.id}
+                  className="bg-card border-2 border-cyber-purple/30 hover:border-cyber-purple/50 transition-all duration-200"
+                >
+                  <CardContent className="p-4 sm:p-6">
+                    <div className="whitespace-pre-wrap break-words text-sm sm:text-base text-foreground leading-relaxed">
+                      {msg.content}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-3 text-right">
+                      {msg.timestamp.toLocaleString("ko-KR", {
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+              {filteredNews.length > 0 && (
+                <div className="border-t-2 border-border my-6 pt-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Newspaper className="w-5 h-5 text-cyber-blue" />
+                    <h3 className="text-lg font-bold bg-gradient-to-r from-cyber-blue to-cyber-purple bg-clip-text text-transparent">
+                      뉴스 아카이브
+                    </h3>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {filteredNews.length === 0 && newsReportMessages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center py-8 sm:py-12 text-muted-foreground px-4">
                 <Newspaper className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 opacity-50" />
@@ -111,7 +173,7 @@ export default function NewsModal({ isOpen, onClose }: NewsModalProps) {
                 </p>
               </div>
             </div>
-          ) : (
+          ) : filteredNews.length > 0 ? (
             filteredNews.map((item) => (
               <Card
                 key={item.id}
@@ -124,9 +186,8 @@ export default function NewsModal({ isOpen, onClose }: NewsModalProps) {
                     </CardTitle>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <Badge
-                        className={newsTypeColors[item.type]}
+                        className={`${newsTypeColors[item.type]} text-xs`}
                         variant="outline"
-                        className="text-xs"
                       >
                         {newsTypeLabels[item.type]}
                       </Badge>
@@ -164,10 +225,9 @@ export default function NewsModal({ isOpen, onClose }: NewsModalProps) {
                 </CardContent>
               </Card>
             ))
-          )}
+          ) : null}
         </div>
       </div>
     </div>
   );
 }
-

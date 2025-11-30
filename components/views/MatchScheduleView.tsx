@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useGameStore } from "@/store/gameStore";
 import { useUIStore } from "@/store/uiStore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { startInteractiveSimulation } from "@/lib/simulation/engine";
 export default function MatchScheduleView() {
   const { 
     currentTeamId, 
-    currentDate, 
+    currentDate, // Zustand store에서 직접 구독하여 자동 업데이트 보장
     scheduledMatches, 
     upcomingMatches: storeUpcomingMatches, 
     getTeamById,
@@ -27,6 +27,23 @@ export default function MatchScheduleView() {
   const { setPendingMatchId: setUIPendingMatchId, setShowPreMatchModal: setUIShowPreMatchModal } = useUIStore();
   const [selectedDate, setSelectedDate] = useState(currentDate);
   const [clickedDate, setClickedDate] = useState<Date | null>(null);
+  
+  // currentDate가 변경되면 selectedDate도 동기화 (사용자가 직접 선택한 경우는 제외)
+  // 단, 같은 월/년도이면 selectedDate를 유지 (사용자가 다른 달을 보고 있을 수 있음)
+  useEffect(() => {
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth();
+    const selectedYear = selectedDate.getFullYear();
+    const selectedMonth = selectedDate.getMonth();
+    
+    // currentDate와 selectedDate가 다른 월/년도이면 currentDate로 동기화
+    // (사용자가 이전 달을 보고 있지 않은 경우)
+    if (currentYear !== selectedYear || currentMonth !== selectedMonth) {
+      // 현재 달력이 표시하는 달이 currentDate와 다르면 동기화
+      setSelectedDate(new Date(currentDate));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentDate]); // currentDate가 변경될 때마다 실행 (selectedDate는 의존성에서 제외하여 무한 루프 방지)
 
   // 다가오는 경기 (gameStore.upcomingMatches 우선, 없으면 scheduledMatches에서 필터링)
   // currentDate 이후의 경기만 표시

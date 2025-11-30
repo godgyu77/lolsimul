@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useGameStore } from "@/store/gameStore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,70 +20,86 @@ export default function DashboardView() {
     getCurrentSeasonEvent,
   } = useGameStore();
 
-  const currentTeam = currentTeamId ? getTeamById(currentTeamId) : null;
+  const currentTeam = useMemo(() => 
+    currentTeamId ? getTeamById(currentTeamId) : null,
+    [currentTeamId, getTeamById]
+  );
   const seasonEvent = getCurrentSeasonEvent();
 
-  // 다음 경기 찾기
-  const nextMatch = scheduledMatches
-    .filter((m) => m.status === "scheduled")
-    .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
+  // 다음 경기 찾기 (useMemo로 최적화)
+  const { nextMatch, nextMatchOpponent } = useMemo(() => {
+    const next = scheduledMatches
+      .filter((m) => m.status === "scheduled")
+      .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
 
-  const nextMatchOpponent = nextMatch
-    ? getTeamById(
-        nextMatch.homeTeamId === currentTeamId
-          ? nextMatch.awayTeamId
-          : nextMatch.homeTeamId
-      )
-    : null;
+    const opponent = next
+      ? getTeamById(
+          next.homeTeamId === currentTeamId
+            ? next.awayTeamId
+            : next.homeTeamId
+        )
+      : null;
 
-  // D-Day 계산
-  const getDDay = (date: Date) => {
-    const today = new Date();
+    return { nextMatch: next, nextMatchOpponent: opponent };
+  }, [scheduledMatches, currentTeamId, getTeamById]);
+
+  // D-Day 계산 (currentDate 기준) (useCallback으로 메모이제이션)
+  const getDDay = useMemo(() => (date: Date) => {
+    const today = new Date(currentDate);
     today.setHours(0, 0, 0, 0);
     const target = new Date(date);
     target.setHours(0, 0, 0, 0);
     const diff = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     return diff;
-  };
+  }, [currentDate]);
 
-  // 팀 현황 계산
-  const completedMatches = matches.filter(
-    (m) =>
-      m.status === "completed" &&
-      (m.homeTeamId === currentTeamId || m.awayTeamId === currentTeamId)
-  );
+  // 팀 현황 계산 (useMemo로 최적화)
+  const { wins, losses, winRate, recentMatches } = useMemo(() => {
+    const completed = matches.filter(
+      (m) =>
+        m.status === "completed" &&
+        (m.homeTeamId === currentTeamId || m.awayTeamId === currentTeamId)
+    );
 
-  const wins = completedMatches.filter(
-    (m) => m.result?.winner === currentTeamId
-  ).length;
-  const losses = completedMatches.length - wins;
-  const winRate = completedMatches.length > 0 ? (wins / completedMatches.length) * 100 : 0;
+    const winsCount = completed.filter(
+      (m) => m.result?.winner === currentTeamId
+    ).length;
+    const lossesCount = completed.length - winsCount;
+    const winRateValue = completed.length > 0 ? (winsCount / completed.length) * 100 : 0;
 
-  // 최근 5경기 전적
-  const recentMatches = completedMatches
-    .sort((a, b) => b.date.getTime() - a.date.getTime())
-    .slice(0, 5)
-    .map((m) => m.result?.winner === currentTeamId);
+    const recent = completed
+      .sort((a, b) => b.date.getTime() - a.date.getTime())
+      .slice(0, 5)
+      .map((m) => m.result?.winner === currentTeamId);
 
-  // 1군 선발 5명 (포지션별로 정렬)
-  const mainRoster = currentTeam
-    ? currentTeam.roster
-        .filter((p) => p.division === "1군")
-        .sort((a, b) => {
-          const positionOrder: Record<string, number> = {
-            TOP: 1,
-            JGL: 2,
-            MID: 3,
-            ADC: 4,
-            SPT: 5,
-          };
-          return positionOrder[a.position] - positionOrder[b.position];
-        })
-        .slice(0, 5)
-    : [];
+    return {
+      wins: winsCount,
+      losses: lossesCount,
+      winRate: winRateValue,
+      recentMatches: recent,
+    };
+  }, [matches, currentTeamId]);
 
-  // 최근 뉴스 3개
-  const recentNews = news.slice(0, 3);
+  // 1군 선발 5명 (포지션별로 정렬) (useMemo로 최적화)
+  const mainRoster = useMemo(() => {
+    if (!currentTeam) return [];
+    
+    const positionOrder: Record<string, number> = {
+      TOP: 1,
+      JGL: 2,
+      MID: 3,
+      ADC: 4,
+      SPT: 5,
+    };
+    
+    return currentTeam.roster
+      .filter((p) => p.division === "1군")
+      .sort((a, b) => positionOrder[a.position] - positionOrder[b.position])
+      .slice(0, 5);
+  }, [currentTeam]);
+
+  // 최근 뉴스 3개 (useMemo로 최적화)
+  const recentNews = useMemo(() => news.slice(0, 3), [news]);
 
   // 시즌 이벤트 이름 매핑
   const seasonEventNames: Record<string, string> = {
@@ -117,9 +134,9 @@ export default function DashboardView() {
   const morale = Math.min(100, Math.max(0, winRate + 20));
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
       {/* 상단 요약 카드 (3열 Grid) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
         {/* 다음 경기 */}
         <Card className="bg-card border-border">
           <CardHeader>

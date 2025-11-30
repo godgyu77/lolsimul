@@ -10,6 +10,170 @@
   }
 }
 
+/* 성능 최적화 */
+@layer base {
+  /* 스크롤 성능 최적화 */
+  .overflow-y-auto,
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+  
+  /* 애니메이션 성능 최적화 */
+  .transition-all,
+  .transition-colors,
+  .transition-transform {
+    will-change: auto;
+  }
+}
+
+/* 리포트 스타일 */
+@layer components {
+  .report-container {
+    @apply w-full p-4 sm:p-5 md:p-6 bg-card border border-border rounded-lg shadow-sm my-2;
+  }
+  
+  .report-header {
+    @apply mb-4 pb-3 border-b-2 border-primary/30;
+  }
+  
+  .report-title {
+    @apply text-sm sm:text-base font-bold text-primary uppercase tracking-wider mb-1;
+  }
+  
+  .report-content {
+    @apply text-sm sm:text-base leading-relaxed space-y-2;
+  }
+  
+  /* 말풍선 크기 자동 조정 */
+  .message-bubble {
+    @apply inline-block;
+    max-width: fit-content;
+    width: auto;
+  }
+  
+  /* 텍스트 콘텐츠 스타일링 */
+  .status-block {
+    @apply my-4 p-3 sm:p-4 bg-primary/10 border-l-4 border-primary rounded-r-lg;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+  
+  .status-label {
+    @apply text-xs sm:text-sm font-bold text-primary uppercase tracking-wider mb-2;
+  }
+  
+  .status-content {
+    @apply text-sm sm:text-base text-foreground leading-relaxed;
+  }
+  
+  .notification-block {
+    @apply my-3 p-3 sm:p-4 bg-cyber-purple/10 border border-cyber-purple/30 rounded-lg flex items-start gap-2 sm:gap-3;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  }
+  
+  .notification-icon {
+    @apply text-lg sm:text-xl flex-shrink-0;
+    filter: drop-shadow(0 0 4px hsl(280 70% 60% / 0.5));
+  }
+  
+  .notification-content {
+    @apply text-sm sm:text-base text-foreground leading-relaxed flex-1;
+  }
+  
+  .report-section-title {
+    @apply text-base sm:text-lg md:text-xl font-bold text-primary mt-4 mb-3 pb-2 border-b border-primary/30;
+    text-shadow: 0 0 8px hsl(217.2 91.2% 59.8% / 0.3);
+  }
+  
+  .text-emphasis {
+    @apply font-bold;
+    color: hsl(217.2 91.2% 70%);
+    text-shadow: 0 0 6px hsl(217.2 91.2% 59.8% / 0.4);
+  }
+  
+  .content-divider {
+    @apply my-4 sm:my-6 border-0 border-t-2;
+    border-color: hsl(217.2 32.6% 30%);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  /* 모달 애니메이션 */
+  @keyframes modal-fade-in {
+    from {
+      opacity: 0;
+      transform: scale(0.95) translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  @keyframes modal-fade-out {
+    from {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.95) translateY(-10px);
+    }
+  }
+
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slide-down {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes message-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .modal-enter {
+    animation: modal-fade-in 0.2s ease-out;
+  }
+
+  .modal-exit {
+    animation: modal-fade-out 0.15s ease-in;
+  }
+
+  .slide-up-enter {
+    animation: slide-up 0.3s ease-out;
+  }
+
+  .slide-down-enter {
+    animation: slide-down 0.3s ease-out;
+  }
+
+  .message-enter {
+    animation: message-fade-in 0.3s ease-out;
+  }
+}
+
 @layer base {
   :root {
     /* 다크 테마 강화 - 고대비 */

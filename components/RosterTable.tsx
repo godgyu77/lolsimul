@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useCallback } from "react";
 import { useGameStore } from "@/store/gameStore";
 import { Player, Tier } from "@/types";
 import { cn } from "@/lib/utils";
@@ -11,7 +12,29 @@ interface RosterTableProps {
 
 export default function RosterTable({ onPlayerClick }: RosterTableProps) {
   const { currentTeamId, getTeamById, currentDate } = useGameStore();
-  const currentTeam = getTeamById(currentTeamId);
+  const currentTeam = useMemo(() => getTeamById(currentTeamId), [currentTeamId, getTeamById]);
+
+  // 선수 목록 정렬 (1군 우선, 포지션 순서) (useMemo로 최적화)
+  const sortedRoster = useMemo(() => {
+    if (!currentTeam) return [];
+    
+    const positionOrder: Record<string, number> = {
+      TOP: 1,
+      JGL: 2,
+      MID: 3,
+      ADC: 4,
+      SPT: 5,
+    };
+
+    return [...currentTeam.roster].sort((a, b) => {
+      // 1군 우선
+      if (a.division !== b.division) {
+        return a.division === "1군" ? -1 : 1;
+      }
+      // 포지션 순서
+      return positionOrder[a.position] - positionOrder[b.position];
+    });
+  }, [currentTeam]);
 
   if (!currentTeam) {
     return (
@@ -20,24 +43,6 @@ export default function RosterTable({ onPlayerClick }: RosterTableProps) {
       </div>
     );
   }
-
-  // 선수 목록 정렬 (1군 우선, 포지션 순서)
-  const positionOrder: Record<string, number> = {
-    TOP: 1,
-    JGL: 2,
-    MID: 3,
-    ADC: 4,
-    SPT: 5,
-  };
-
-  const sortedRoster = [...currentTeam.roster].sort((a, b) => {
-    // 1군 우선
-    if (a.division !== b.division) {
-      return a.division === "1군" ? -1 : 1;
-    }
-    // 포지션 순서
-    return positionOrder[a.position] - positionOrder[b.position];
-  });
 
   // 종합 스탯 계산
   const calculateOverall = (player: Player): number => {
@@ -90,9 +95,9 @@ export default function RosterTable({ onPlayerClick }: RosterTableProps) {
 
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden flex flex-col h-full max-h-[calc(100vh-300px)]">
-      <div className="px-6 py-4 border-b border-border flex-shrink-0">
-        <h2 className="text-xl font-bold">로스터</h2>
-        <p className="text-sm text-muted-foreground mt-1">
+      <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-border flex-shrink-0">
+        <h2 className="text-base sm:text-lg md:text-xl font-bold">로스터</h2>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
           {currentTeam.name} 선수 명단
         </p>
       </div>

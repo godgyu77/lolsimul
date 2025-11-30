@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import HeaderStatus from "@/components/HeaderStatus";
 import GameChatInterface from "@/components/GameChatInterface";
+import GameInputFooter from "@/components/GameInputFooter";
 import { useGameStore } from "@/store/gameStore";
 import { useUIStore } from "@/store/uiStore";
 import TournamentBriefingModal from "@/components/TournamentBriefingModal";
@@ -104,31 +105,71 @@ export default function Home() {
           </div>
 
 
-          {/* PC 레이아웃: 채팅 중심 (중앙 정렬, max-width) */}
-          <div className="hidden lg:flex flex-1 h-full overflow-hidden min-w-0 relative">
-            {/* 중앙 정렬 컨테이너 */}
-            <div className="flex flex-col flex-1 h-full overflow-hidden items-center justify-center">
-              {/* 채팅창 - 최대 너비 제한 및 중앙 정렬 */}
-              <div className="flex flex-col w-full max-w-[1200px] h-full overflow-hidden">
-                {/* 상단 상태 바 */}
-                <HeaderStatus />
-                
-                {/* 채팅 인터페이스 */}
-                <div className="flex-1 overflow-hidden">
-                  <GameChatInterface />
-                </div>
-              </div>
+          {/* 작은 화면 레이아웃 (1024px 미만) */}
+          <div className="lg:hidden flex flex-col flex-1 h-full overflow-hidden min-w-0">
+            {/* 상단 헤더 - Full-width 고정 */}
+            <div className="w-full flex-shrink-0">
+              <HeaderStatus />
+            </div>
+            
+            {/* 채팅 인터페이스 - 전체 공간 사용 */}
+            <div 
+              className="flex-1 overflow-hidden min-h-0"
+              onClick={(e) => {
+                // 메인 화면 클릭 시 작전지시 모달 닫기
+                const footer = document.querySelector('[data-footer-container]');
+                if (footer) {
+                  const actionModal = footer.querySelector('[data-action-modal]');
+                  if (actionModal && actionModal.getAttribute('data-open') === 'true') {
+                    const closeEvent = new Event('close-action-modal');
+                    footer.dispatchEvent(closeEvent);
+                  }
+                }
+              }}
+            >
+              <GameChatInterface hideHeader={true} hideInput={true} />
+            </div>
+            
+            {/* 하단 입력 영역 - Full-width footer */}
+            <div className="w-full flex-shrink-0">
+              <GameInputFooter />
             </div>
           </div>
 
-          {/* 모바일 레이아웃: 채팅 중심 */}
-          <div className="lg:hidden flex flex-col flex-1 h-full overflow-hidden pt-14">
-            {/* 상단 상태 바 */}
-            <HeaderStatus />
+          {/* 큰 화면 레이아웃 (1024px 이상): 리포트 형식 (중앙 정렬, max-width) */}
+          <div className="hidden lg:flex flex-col flex-1 h-full overflow-hidden min-w-0 relative">
+            {/* 상단 헤더 - Full-width 고정 */}
+            <div className="w-full flex-shrink-0">
+              <HeaderStatus />
+            </div>
             
-            {/* 채팅 인터페이스 - 전체 공간 사용 */}
-            <div className="flex-1 overflow-hidden">
-              <GameChatInterface />
+            {/* 메인 콘텐츠 영역 - 중앙 정렬 및 폭 제한 */}
+            <div 
+              className="flex-1 overflow-hidden min-h-0 flex items-center justify-center"
+              onClick={(e) => {
+                // 메인 화면 클릭 시 작전지시 모달 닫기
+                const footer = document.querySelector('[data-footer-container]');
+                if (footer) {
+                  const actionModal = footer.querySelector('[data-action-modal]');
+                  if (actionModal && actionModal.getAttribute('data-open') === 'true') {
+                    // 모달이 열려있으면 닫기 이벤트 트리거
+                    const closeEvent = new Event('close-action-modal');
+                    footer.dispatchEvent(closeEvent);
+                  }
+                }
+              }}
+            >
+              <div className="w-full max-w-[1200px] h-full flex flex-col overflow-hidden">
+                {/* 채팅 인터페이스 (헤더 및 입력창 제거) */}
+                <div className="flex-1 overflow-hidden min-h-0">
+                  <GameChatInterface hideHeader={true} hideInput={true} />
+                </div>
+              </div>
+            </div>
+            
+            {/* 하단 입력 영역 - Full-width footer */}
+            <div className="w-full flex-shrink-0">
+              <GameInputFooter />
             </div>
           </div>
         </div>
