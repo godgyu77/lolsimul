@@ -1298,7 +1298,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         }));
 
       // API 호출
-      const response = await fetch("/api/chat", {
+      const response = await fetch("http://localhost:3001/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

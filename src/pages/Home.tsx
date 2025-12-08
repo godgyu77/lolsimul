@@ -1,7 +1,4 @@
-"use client";
-
-import { useState, useEffect, useRef } from "react";
-import dynamic from "next/dynamic";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import HeaderStatus from "@/components/HeaderStatus";
 import GameChatInterface from "@/components/GameChatInterface";
 import GameInputFooter from "@/components/GameInputFooter";
@@ -12,22 +9,11 @@ import SimulationPhaseIndicator from "@/components/SimulationPhaseIndicator";
 import SimulationChoiceModal from "@/components/SimulationChoiceModal";
 import LoadingProgressBar from "@/components/LoadingProgressBar";
 
-// 모달 컴포넌트를 동적 임포트 (SSR 비활성화)
-const ApiKeyModal = dynamic(() => import("@/components/ApiKeyModal"), {
-  ssr: false,
-});
-
-const GameModeSelectionModal = dynamic(() => import("@/components/GameModeSelectionModal"), {
-  ssr: false,
-});
-
-const CharacterCreationModal = dynamic(() => import("@/components/CharacterCreationModal"), {
-  ssr: false,
-});
-
-const TeamSelectionModal = dynamic(() => import("@/components/TeamSelectionModal"), {
-  ssr: false,
-});
+// 모달 컴포넌트를 동적 임포트 (React.lazy 사용)
+const ApiKeyModal = lazy(() => import("@/components/ApiKeyModal"));
+const GameModeSelectionModal = lazy(() => import("@/components/GameModeSelectionModal"));
+const CharacterCreationModal = lazy(() => import("@/components/CharacterCreationModal"));
+const TeamSelectionModal = lazy(() => import("@/components/TeamSelectionModal"));
 
 export default function Home() {
   const { currentTeamId, apiKey, gameMode, userPlayer, isLoading, currentDate, getCurrentSeasonEvent } = useGameStore();
@@ -77,16 +63,30 @@ export default function Home() {
   return (
     <>
       {/* 1단계: API 키 입력 */}
-      <ApiKeyModal />
+      <Suspense fallback={null}>
+        <ApiKeyModal />
+      </Suspense>
       
       {/* 2단계: 게임 모드 선택 */}
-      {!showApiKeyModal && <GameModeSelectionModal />}
+      {!showApiKeyModal && (
+        <Suspense fallback={null}>
+          <GameModeSelectionModal />
+        </Suspense>
+      )}
       
       {/* 3단계: 캐릭터 생성 (선수 모드) */}
-      {!showApiKeyModal && !showGameModeSelection && <CharacterCreationModal />}
+      {!showApiKeyModal && !showGameModeSelection && (
+        <Suspense fallback={null}>
+          <CharacterCreationModal />
+        </Suspense>
+      )}
       
       {/* 4단계: 팀 선택 */}
-      {!showApiKeyModal && !showGameModeSelection && !showCharacterCreation && <TeamSelectionModal />}
+      {!showApiKeyModal && !showGameModeSelection && !showCharacterCreation && (
+        <Suspense fallback={null}>
+          <TeamSelectionModal />
+        </Suspense>
+      )}
 
       {/* 대회 브리핑 모달 */}
       <TournamentBriefingModal />

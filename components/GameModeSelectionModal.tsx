@@ -1,14 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Users, User, Briefcase, Trophy } from "lucide-react";
 import { useGameStore } from "@/store/gameStore";
-
-const LoadGameModal = dynamic(() => import("@/components/LoadGameModal"), {
-  ssr: false,
-});
+import LoadGameModal from "@/components/LoadGameModal";
 
 export default function GameModeSelectionModal() {
   const { setGameMode, apiKey, gameMode, hasSavedGame } = useGameStore();
